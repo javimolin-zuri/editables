@@ -31,6 +31,7 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
 </style></head><body><main>
 <h1>Convertidor HTML ⇄ Illustrator</h1>
 <p class="s">Sube tu lámina en HTML y obtén un archivo vectorial editable (capas, textos vivos, formas, imágenes). También puedes hacer el camino inverso.</p>
+<div class="card" id="meter" style="margin-bottom:14px;padding:14px 18px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>Almacenamiento del repositorio</b><span id="mTx" class="st" style="margin:0">Sin conexión</span></div><div style="height:12px;border-radius:8px;background:var(--bg);border:1px solid var(--ln);margin:8px 0;overflow:hidden"><div id="mBar" style="height:100%;width:0;background:var(--ok);transition:width .4s"></div></div><div id="mNote" class="st" style="margin:0"></div></div>
 <div class="tabs"><button class="on" data-t="a">HTML → Illustrator</button><button data-t="b">Illustrator (.ai / SVG) → HTML</button><button data-t="c">📁 Mi biblioteca</button></div>
 
 <section class="card" id="a">
@@ -46,6 +47,7 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
 
 <section class="card hide" id="b">
  <label class="drop" id="dB"><input type="file" accept=".ai,.pdf,.svg"><b>Arrastra tu .ai (o .pdf / .svg) aquí</b><br>cada mesa de trabajo pasa a ser una sección del HTML</label>
+ <label class="st" style="display:block;margin-top:10px"><input type="checkbox" id="opt" checked> Optimizar imágenes del .ai (WebP 85%): reduce mucho el peso del HTML</label>
  <p class="st" id="sB"></p><div class="res" id="rB"></div>
  <ul class="note">
   <li><b>.ai:</b> se lee a través de su contenido compatible con PDF. Cada página detectada = una mesa de trabajo, en orden, dentro de un solo HTML. Revisa que el número de mesas coincida con el de tu archivo; si faltan, vuelve a guardar en Illustrator con <i>«Crear archivo compatible con PDF»</i> activado.</li>
@@ -55,8 +57,8 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
 </section>
 <section class="card hide" id="c">
  <details id="cfg" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">⚙ Conexión con GitHub</summary>
-  <p class="st">Usa un repositorio <b>privado</b> solo para tus editables (la página puede estar en otro repositorio). Crea un token en GitHub › Settings › Developer settings › Fine-grained tokens, limitado a ese repositorio, con permiso <b>Contents: Read and write</b>. El token se guarda solo en este navegador.</p>
-  <input class="fi" id="g_o" placeholder="Usuario u organización (owner)"><input class="fi" id="g_r" placeholder="Nombre del repositorio"><input class="fi" id="g_br" placeholder="Rama (main)"><input class="fi" id="g_b" placeholder="Carpeta base (editables)"><input class="fi" id="g_t" type="password" placeholder="Token de acceso">
+  <p class="st">Para <b>ver y descargar</b> tus archivos solo necesitas usuario y repositorio (es público): sin token. El token solo se pide para <b>guardar, mover o borrar</b>; se guarda en este navegador. Puedes dejar usuario/repositorio fijos en el código (<code>GH_DEFAULT</code>). No pegues el token en el código de un repositorio público: GitHub lo detecta y lo revoca automáticamente, y cualquiera podría usarlo para modificar tu repositorio.</p>
+  <input class="fi" id="g_o" placeholder="Usuario u organización (owner)"><input class="fi" id="g_r" placeholder="Nombre del repositorio"><input class="fi" id="g_br" placeholder="Rama (main)"><input class="fi" id="g_b" placeholder="Carpeta base (editables)"><input class="fi" id="g_t" type="password" placeholder="Token (opcional: solo para guardar o borrar)">
   <button class="btn" id="g_s">Guardar y conectar</button></details>
  <p class="st" id="sC">Cargando…</p>
  <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir HTML aquí<input type="file" id="up" accept=".html,.htm" multiple class="hide"></label></div>
@@ -162,18 +164,23 @@ wire('#dA',async f=>{
 });
 
 /* ---------- AI/PDF -> HTML (multi-mesa) ---------- */
+async function optImgs(s){const re=/data:image\/png;base64,[A-Za-z0-9+\/=]+/g,m=[...s.matchAll(re)];if(!m.length)return s;const rep=[];
+  for(const x of m)rep.push(await new Promise(r=>{const im=new Image;im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);const u=c.toDataURL('image/webp',.85);r(u.startsWith('data:image/webp')&&u.length<x[0].length?u:x[0])};im.onerror=()=>r(x[0]);im.src=x[0]}));
+  let i=0;return s.replace(re,()=>rep[i++])}
 async function aiToHtml(f){
   stat('#sB','Leyendo archivo…');
   try{
     if(!window.pdfjsLib||!pdfjsLib.SVGGraphics)throw new Error('no se pudo cargar el lector (revisa tu conexión)');
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    let pdf;try{pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise}
+    class FR extends pdfjsLib.PDFDataRangeTransport{constructor(x){super(x.size,null);this.f=x}requestDataRange(b,e){this.f.slice(b,e).arrayBuffer().then(x=>this.onDataRange(b,new Uint8Array(x)))}}
+    let pdf;try{try{pdf=await pdfjsLib.getDocument({range:new FR(f),disableAutoFetch:true,disableStream:true}).promise}
+      catch(e0){if(f.size>500*1048576)throw e0;pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise}}
     catch(e){throw new Error('este .ai no trae contenido compatible con PDF. Guárdalo de nuevo con «Crear archivo compatible con PDF» o expórtalo como SVG')}
     const faces=new Map(),secs=[];
     for(let i=1;i<=pdf.numPages;i++){
       stat('#sB',`Convirtiendo mesa ${i} de ${pdf.numPages}…`);
       const page=await pdf.getPage(i),vp=page.getViewport({scale:1}),g=new pdfjsLib.SVGGraphics(page.commonObjs,page.objs);g.embedFonts=true;
-      let s=new XMLSerializer().serializeToString(await g.getSVG(await page.getOperatorList(),vp));
+      let s=new XMLSerializer().serializeToString(await g.getSVG(await page.getOperatorList(),vp));if($('#opt').checked)s=await optImgs(s);
       const ids=new Set([...s.matchAll(/ id="([^"]+)"/g)].map(m=>m[1]));
       for(const x of ids)s=s.split(` id="${x}"`).join(` id="m${i}-${x}"`).split(`url(#${x})`).join(`url(#m${i}-${x})`).split(`href="#${x}"`).join(`href="#m${i}-${x}"`);
       s=s.replace(/<style[^>]*>([\s\S]*?)<\/style>/g,(_,c)=>{const rest=c.replace(/@font-face\s*\{[^}]*\}/g,r=>{faces.set((r.match(/font-family:\s*([^;}]+)/)||[])[1]||r,r);return ''});return rest.trim()?`<style>${rest}</style>`:''});
@@ -206,15 +213,24 @@ wire('#dB',async f=>{
 });
 
 /* ---------- Biblioteca (GitHub) ---------- */
-let F=[],sel='',BASE='editables';
-const CF=()=>{try{return JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){return{}}};
+let F=[],sel='',BASE='editables',USED=0;
+const LIM=1024**3,fm=x=>x>=1073741824?(x/1073741824).toFixed(2)+' GB':(x/1048576).toFixed(1)+' MB';
+function meter(b){const bar=$('#mBar'),tx=$('#mTx'),nt=$('#mNote');
+  if(b==null){USED=0;bar.style.width='0';tx.textContent='Sin conexión';nt.textContent='Conecta tu repositorio para ver cuánto espacio queda.';return}
+  USED=b;const p=b/LIM*100;bar.style.width=Math.min(p,100)+'%';bar.style.background=p>=90?'#c0392b':p>=70?'#d68910':'var(--ok)';
+  tx.textContent=`${fm(b)} usados de 1 GB · quedan ${fm(Math.max(LIM-b,0))} (${Math.max(100-p,0).toFixed(1)}% libre)`;
+  nt.textContent=p>=100?'⚠ Superaste el 1 GB recomendado por GitHub. Respalda tus archivos y crea otro repositorio para lo nuevo.':p>=90?'⚠ Queda menos del 10%. Ve preparando un segundo repositorio y haz un respaldo.':p>=70?'Atención: sobre el 70% del espacio recomendado. Planifica un repositorio adicional.':'GitHub recomienda repositorios bajo 1 GB (hasta 5 GB como máximo sugerido) y archivos bajo 100 MB. Borrar archivos no libera espacio: el historial de Git los conserva.'}
+/* Valores por defecto: rellena owner y repo aquí para no escribirlos nunca más. El token es OPCIONAL (solo se necesita para guardar/borrar). */
+const GH_DEFAULT={o:'',r:'',br:'main',b:'editables',t:''};
+const CF=()=>{let u={};try{u=JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){}Object.keys(u).forEach(k=>{if(!u[k])delete u[k]});return{...GH_DEFAULT,...u}};
 const BR=()=>CF().br||'main',enc=p=>p.split('/').map(encodeURIComponent).join('/');
-async function gh(p,o={}){const c=CF(),r=await fetch(`https://api.github.com/repos/${c.o}/${c.r}${p}`,{...o,headers:{Authorization:'Bearer '+c.t,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(o.headers||{})}});
+async function gh(p,o={}){const c=CF(),r=await fetch(`https://api.github.com/repos/${c.o}/${c.r}${p}`,{...o,headers:{...(c.t?{Authorization:'Bearer '+c.t}:{}),Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(o.headers||{})}});
   if(!r.ok){let m=r.status;try{m+=' '+(await r.json()).message}catch(e){}throw new Error(m)}return r}
 const toB64=b=>new Promise(r=>{const f=new FileReader;f.onload=()=>r(f.result.split(',')[1]);f.readAsDataURL(b)});
-async function put(path,blob,msg){const ex=F.find(f=>f.p===path),body={message:msg||'Agregar '+path,content:await toB64(blob),branch:BR()};if(ex)body.sha=ex.sha;
+const needTok=()=>{if(!CF().t)throw new Error('Para guardar o borrar necesitas el token (⚙ Conexión con GitHub). Para ver y descargar no hace falta.')};
+async function put(path,blob,msg){needTok();const ex=F.find(f=>f.p===path),body={message:msg||'Agregar '+path,content:await toB64(blob),branch:BR()};if(ex)body.sha=ex.sha;
   await gh('/contents/'+enc(path),{method:'PUT',body:JSON.stringify(body)})}
-const del=f=>gh('/contents/'+enc(f.p),{method:'DELETE',body:JSON.stringify({message:'Eliminar '+f.p,sha:f.sha,branch:BR()})});
+const del=f=>(needTok(),gh)('/contents/'+enc(f.p),{method:'DELETE',body:JSON.stringify({message:'Eliminar '+f.p,sha:f.sha,branch:BR()})});
 const raw=async p=>(await gh('/contents/'+enc(p)+'?ref='+encodeURIComponent(BR()),{headers:{Accept:'application/vnd.github.raw+json'}})).text();
 const mv=async(f,np)=>{const t=f.p.endsWith('.gitkeep')?'\n':await raw(f.p);await put(np,new Blob([t]),'Mover '+f.p+' → '+np);await del(f)};
 const dirs=()=>{const D=new Set([BASE]);F.forEach(f=>{const q=f.p.split('/');for(let i=1;i<q.length;i++)D.add(q.slice(0,i).join('/'))});return[...D].filter(d=>d.startsWith(BASE))};
@@ -230,12 +246,15 @@ function ask(t,mode,def=''){return new Promise(r=>{const D=$('#dlg'),i=$('#di'),
 const okName=n=>n&&!/[\/\\]/.test(n)&&!n.startsWith('.')?n:(stat('#sC','Nombre no válido (sin «/» ni punto inicial).','er'),null);
 async function load(){
   const c=CF();BASE=(c.b||'editables').replace(/^\/+|\/+$/g,'');
-  if(!c.t||!c.o||!c.r){stat('#sC','Configura tu repositorio y token en «Conexión con GitHub».','er');$('#cfg').open=true;F=[];return draw()}
+  if(!c.o||!c.r){meter(null);stat('#sC','Indica tu usuario y repositorio en «Conexión con GitHub» (o déjalos fijos en el código, en GH_DEFAULT).','er');$('#cfg').open=true;F=[];return draw()}
   stat('#sC','Leyendo repositorio…');
   try{const tr=await(await gh('/git/trees/'+encodeURIComponent(BR())+'?recursive=1')).json();
+    const all=tr.tree.filter(e=>e.type==='blob').reduce((a,e)=>a+(e.size||0),0);let ks=0;
+    try{ks=((await(await gh('')).json()).size||0)*1024}catch(e){}
+    meter(Math.max(all,ks));
     F=tr.tree.filter(e=>e.type==='blob'&&e.path.startsWith(BASE+'/')).map(e=>({p:e.path,s:e.size,sha:e.sha}));
     if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (${BR()}) · ${F.filter(vis).length} archivo(s).`,'ok')}
-  catch(e){F=[];sel=BASE;stat('#sC',/40[49]/.test(e.message)?'El repositorio está vacío, o la rama/permisos no son correctos ('+e.message+'). Sube un archivo para empezar.':'Error: '+e.message,'er')}
+  catch(e){F=[];sel=BASE;if(!/40[49]/.test(e.message))meter(null);else meter(0);stat('#sC',/40[49]/.test(e.message)?'El repositorio está vacío, o la rama/permisos no son correctos ('+e.message+'). Sube un archivo para empezar.':'Error: '+e.message,'er')}
   draw()}
 function draw(){
   if(!sel)sel=BASE;
@@ -246,7 +265,11 @@ function draw(){
    <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar HTML</button><button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button><button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
 const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){stat('#sC','Error: '+e.message,'er');await load().catch(()=>{})}};
 async function saveToLib(name,html){
-  const f=await ask('Guardar «'+name+'» en la carpeta:','s');if(!f)return;const path=f+'/'+name;
+  const sz=new Blob([html]).size;
+  if(sz>100*1048576)return alert('«'+name+'» pesa '+fm(sz)+' y GitHub no admite archivos de más de 100 MB. Activa la optimización de imágenes o separa las mesas en varios archivos.');
+  const f=await ask('Guardar «'+name+'» ('+fm(sz)+') en la carpeta:','s');if(!f)return;const path=f+'/'+name;
+  if(sz>50*1048576&&!await ask('Pesa más de 50 MB (GitHub lo advierte). ¿Subirlo igual?','c'))return;
+  if(USED+sz>LIM&&!await ask('Esto superaría el 1 GB recomendado del repositorio. ¿Subirlo de todos modos?','c'))return;
   if(F.some(x=>x.p===path)&&!await ask('«'+name+'» ya existe en esa carpeta. ¿Reemplazarlo?','c'))return;
   sel=f;showTab('c');await busy('Subiendo «'+name+'» al repositorio…',()=>put(path,new Blob([html],{type:'text/html'})))}
 function addSave(c,name,html){const b=document.createElement('button');b.className='btn g';b.textContent='Guardar en biblioteca';b.onclick=()=>saveToLib(name,html);c.appendChild(b)}
@@ -259,7 +282,10 @@ $('#df').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no s
   const fl=F.filter(f=>f.p.startsWith(sel+'/'));if(!await ask(`¿Eliminar «${pathOf(sel)}» con ${fl.filter(vis).length} archivo(s)? (queda en el historial de Git)`,'c'))return;
   const par=dirOf(sel);await busy('',async()=>{let i=0;for(const f of fl){stat('#sC',`Eliminando ${++i} de ${fl.length}…`);await del(f)}sel=par})};
 $('#rl').onclick=load;
-$('#up').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await busy('',async()=>{let i=0;for(const f of fs){stat('#sC',`Subiendo ${++i} de ${fs.length}: ${f.name}`);await put(sel+'/'+f.name,f)}})};
+$('#up').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await busy('',async()=>{let i=0;for(const f of fs){stat('#sC',`Subiendo ${++i} de ${fs.length}: ${f.name}`);if(f.size>100*1048576){stat('#sC',f.name+' supera los 100 MB que permite GitHub; se omitió.','er');continue}
+    if(f.size>50*1048576&&!await ask(f.name+' pesa más de 50 MB (GitHub lo advierte). ¿Subirlo igual?','c'))continue;
+    if(USED+f.size>LIM&&!await ask('Subir «'+f.name+'» superaría el 1 GB recomendado del repositorio. ¿Subirlo de todos modos?','c'))continue;
+    await put(sel+'/'+f.name,f)}})};
 $('#c').onclick=async e=>{
   const fk=e.target.closest('[data-fk]');if(fk){sel=fk.dataset.fk;return draw()}
   const bt=e.target.closest('[data-a]');if(!bt)return;const f=F.find(x=>x.p===bt.dataset.k),act=bt.dataset.a,nm=f.p.split('/').pop();
