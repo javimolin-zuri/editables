@@ -62,7 +62,7 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
   <input class="fi" id="g_o" placeholder="Usuario u organización (owner)"><input class="fi" id="g_r" placeholder="Nombre del repositorio"><input class="fi" id="g_br" placeholder="Rama (main)"><input class="fi" id="g_b" placeholder="Carpeta base (editables)"><input class="fi" id="g_t" type="password" placeholder="Token (opcional: solo para guardar o borrar)">
   <button class="btn" id="g_s">Guardar y conectar</button></details>
  <p class="st" id="sC">Cargando…</p>
- <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir HTML aquí<input type="file" id="up" accept=".html,.htm" multiple class="hide"></label></div>
+ <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir archivos aquí (HTML o TXT)<input type="file" id="up" accept=".html,.htm,.txt,.md" multiple class="hide"></label></div>
  <details id="imp" open style="margin:0 0 14px"><summary style="cursor:pointer;font-weight:600">📦 Importar proyecto desde ZIP</summary>
   <label class="drop" id="dZ" style="margin-top:10px;padding:22px"><input type="file" accept=".zip" multiple><b>Arrastra uno o varios .zip</b><br>detecta el proyecto, sus HTML y láminas; no guarda los PNG exportados</label>
   <div class="res" id="zres"></div></details>
@@ -266,7 +266,7 @@ function draw(){
   $('#tree').innerHTML=flat().map(([k,d])=>`<div class="fo${k===sel?' on':''}" data-fk="${esc(k)}" style="padding-left:${d*18+8}px">📁 ${esc(k.split('/').pop())} <span class="st">(${cnt(k)})</span></div>`).join('');
   const fs=F.filter(f=>vis(f)&&dirOf(f.p)===sel).sort((x,y)=>x.p.localeCompare(y.p));
   $('#files').innerHTML=fs.length?fs.map(f=>`<div class="row"><div><b>${esc(f.p.split('/').pop())}</b><br><span class="st">${(f.s/1048576).toFixed(2)} MB</span><br>
-   <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar HTML</button><button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button><button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
+   <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar</button>${/\.html?$/i.test(f.p)?`<button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button>`:/\.(txt|md)$/i.test(f.p)?`<button class="btn" data-a="cp" data-k="${esc(f.p)}">Copiar texto</button>`:''}<button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
 const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){stat('#sC','Error: '+e.message,'er');await load().catch(()=>{})}};
 async function saveToLib(name,html){
   const sz=new Blob([html]).size;
@@ -278,7 +278,10 @@ async function saveToLib(name,html){
   sel=f;showTab('c');await busy('Subiendo «'+name+'» al repositorio…',()=>put(path,new Blob([html],{type:'text/html'})))}
 function addSave(c,name,html){const b=document.createElement('button');b.className='btn g';b.textContent='Guardar en biblioteca';b.onclick=()=>saveToLib(name,html);c.appendChild(b)}
 function addSaveRow(res,name,html){const r=document.createElement('div');r.className='row';r.innerHTML='<div><b>Archivo original</b><br><span class="st">Guarda tu editable en HTML en tu repositorio.</span><br></div>';addSave(r.lastChild,name,html);res.appendChild(r)}
-$('#nf').onclick=async()=>{const n=okName(await ask('Nombre de la nueva carpeta (dentro de «'+pathOf(sel)+'»)','t'));if(n){const p=sel+'/'+n;sel=p;await busy('Creando carpeta…',()=>put(p+'/.gitkeep',new Blob(['\n']),'Crear carpeta '+p))}};
+$('#nf').onclick=async()=>{const v=await ask('Nueva carpeta dentro de «'+pathOf(sel)+'». Para crear subcarpetas de una vez, separa con «/»: Clientes/Neorigen/Casa Ciprés','t');if(!v)return;
+  const sg=v.split('/').map(x=>x.trim()).filter(Boolean);if(!sg.length||sg.some(x=>x.startsWith('.')||/\\/.test(x)))return stat('#sC','Nombre no válido (sin «\\» ni punto inicial).','er');
+  const p=sel+'/'+sg.join('/');if(dirs().includes(p))return stat('#sC','Esa carpeta ya existe.','er');
+  sel=p;await busy('Creando carpeta…',()=>put(p+'/.gitkeep',new Blob(['\n']),'Crear carpeta '+p))};
 $('#rf').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no se puede renombrar.','er');
   const n=okName(await ask('Nuevo nombre de la carpeta','t',sel.split('/').pop()));if(!n)return;const np=dirOf(sel)+'/'+n,old=sel,fl=F.filter(f=>f.p.startsWith(old+'/'));
   await busy('',async()=>{let i=0;for(const f of fl){stat('#sC',`Moviendo ${++i} de ${fl.length}…`);await mv(f,np+f.p.slice(old.length))}sel=np})};
@@ -296,6 +299,7 @@ $('#c').onclick=async e=>{
   try{
   if(act==='dl'){stat('#sC','Descargando…');save(nm,await raw(f.p));stat('#sC','Listo.','ok')}
   else if(act==='ai'){stat('#sC','Preparando…');const t=await raw(f.p),dt=new DataTransfer(),inp=$('#dA input');dt.items.add(new File([t],nm,{type:'text/html'}));inp.files=dt.files;showTab('a');inp.onchange()}
+  else if(act==='cp'){const t=await raw(f.p);await navigator.clipboard.writeText(t);stat('#sC','Texto copiado al portapapeles.','ok')}
   else if(act==='mv'){const d=await ask('Mover a la carpeta:','s');if(d&&d!==dirOf(f.p))await busy('Moviendo…',()=>mv(f,d+'/'+nm))}
   else if(act==='rn'){const n=okName(await ask('Nuevo nombre','t',nm));if(n&&n!==nm)await busy('Renombrando…',()=>mv(f,dirOf(f.p)+'/'+n))}
   else if(act==='rm'&&await ask('¿Eliminar «'+nm+'»? (queda en el historial de Git)','c'))await busy('Eliminando…',()=>del(f));
@@ -310,6 +314,7 @@ const zcollect=(h,dir,has)=>{const s=new Set();for(const m of h.matchAll(ZRE)){c
 async function zinline(h,dir,zip){const has=k=>!!zip.file(k),M={};
   for(const k of zcollect(h,dir,has))M[k]=`data:${MIME[k.split('.').pop().toLowerCase()]||'application/octet-stream'};base64,`+await zip.file(k).async('base64');
   return h.replace(ZRE,(a,p1,p2,p3,p4,p5,p6)=>{const k=zres(dir,p2||p5,has);return k?(p2?p1+M[k]+p3:p4+M[k]+p6):a})}
+const zclean=s=>s.replace(/[\s_-]*(?<![A-Za-z0-9])(editable|html|completo|final|v\d+)(?![A-Za-z0-9])/gi,'').replace(/^[\s_-]+|[\s_-]+$/g,'')||s;
 async function zanalyze(file){
   const zip=await JSZip.loadAsync(file),ents=Object.values(zip.files).filter(e=>!e.dir&&!e.name.includes('__MACOSX/')&&!e.name.split('/').pop().startsWith('.')),has=k=>!!zip.file(k);
   const items=[],used=new Set(),sz={};let imgs=0,oth=0;
@@ -319,28 +324,48 @@ async function zanalyze(file){
       items.push({path:e.name,dir,kind:'html',secs:Math.max(1,(t.match(/<section\b/gi)||[]).length),est,refs,title:((t.match(/<title>([^<]*)/i)||[])[1]||'').trim(),gf:/fonts\.googleapis\.com/.test(t)})}
     else if(/^(txt|md)$/.test(ext))items.push({path:e.name,dir,kind:'txt',secs:0,est:(await e.async('uint8array')).length,refs:[]});
     else if(MIME[ext])imgs++;else oth++}
-  items.forEach(it=>it.out=it.path.split('/').pop());
+  items.forEach(it=>{it.out=it.path.split('/').pop()});
   items.forEach(it=>{if(items.filter(x=>x.out===it.out).length>1)it.out=it.path.replace(/\//g,'_')});
-  const hs=items.filter(i=>i.kind==='html');
-  for(const d of new Set(hs.map(i=>i.dir))){const g=hs.filter(i=>i.dir===d),multi=g.filter(i=>i.secs>1),one=g.filter(i=>i.secs===1);
-    const m=multi.find(x=>x.secs===one.length);if(m&&one.length>1)one.forEach(i=>i.dup=m.out)}
-  return{zip,items,skip:Math.max(0,imgs-[...used].filter(u=>MIME[u.split('.').pop().toLowerCase()]).length),oth}}
+  items.forEach(it=>{it.stem=it.out.replace(/\.[^.]+$/,'');it.ext=(it.out.match(/\.[^.]+$/)||[''])[0];it.grp=null});
+  const G=[],hs=items.filter(i=>i.kind==='html');
+  for(const d of new Set(hs.map(i=>i.dir))){
+    const dh=hs.filter(i=>i.dir===d),one=dh.filter(i=>i.secs===1),multi=dh.filter(i=>i.secs>1),by={};
+    one.forEach(i=>{const m=i.stem.match(/^(.*?)[\s_.-]*(\d+)$/);if(m){i.n=+m[2];i.pre=m[1];(by[m[1].toLowerCase()]??=[]).push(i)}});
+    for(const k in by){if(by[k].length<2)continue;const mem=by[k].sort((a,b)=>a.n-b.n),w=Math.max(2,...mem.map(i=>String(i.n).length)),
+        comb=multi.find(x=>x.grp==null&&x.secs===mem.length),pre=(mem[0].pre||'lamina').replace(/[\s.-]+$/,'').replace(/\s+/g,'_')||'lamina';
+      mem.forEach(i=>{i.stem=pre+'_'+String(i.n).padStart(w,'0');i.grp=G.length;if(comb)i.dup=comb.out});
+      if(comb){comb.grp=G.length;comb.role='completo'}
+      G.push({name:comb?zclean(comb.stem):pre,members:mem.concat(comb?[comb]:[])})}}
+  return{zip,items,groups:G,skip:Math.max(0,imgs-[...used].filter(u=>MIME[u.split('.').pop().toLowerCase()]).length),oth}}
 function zcard(file,A){const el=document.createElement('div');el.className='row';el.style.display='block';
-  el.innerHTML=`<b>📦 ${esc(file.name)}</b><br><span class="st">Nombre del proyecto (carpeta):</span><input class="fi pn" value="${esc(file.name.replace(/\.zip$/i,'').trim())}">
-  <div class="st">Se creará dentro de «${esc(pathOf(sel))}» (la carpeta seleccionada en el árbol).</div>
-  ${A.items.map((it,i)=>`<label style="display:block;margin:8px 0"><input type="checkbox" data-i="${i}"${it.dup?'':' checked'}> <b>${esc(it.out)}</b> <span class="st">· ${it.kind==='html'?(it.secs>1?it.secs+' láminas juntas':'1 lámina'):'texto'} · ${fm(it.est)}${it.refs.length?' · incrusta '+it.refs.length+' imagen(es)':''}${it.gf?' · usa Google Fonts (necesita internet)':''}${it.dup?' · <b>ya incluida en «'+esc(it.dup)+'»</b> (desmarcada)':''}</span>${it.title?'<br><span class="st">«'+esc(it.title)+'»</span>':''}</label>`).join('')||'<p class="st">No se encontraron HTML.</p>'}
+  const info=it=>`${it.role==='completo'?'versión completa · '+it.secs+' láminas juntas':it.kind==='txt'?'texto':it.grp!=null?'lámina '+it.n:it.secs>1?it.secs+' láminas juntas':'1 lámina'} · ${fm(it.est)}${it.refs.length?' · incrusta '+it.refs.length+' imagen(es)':''}${it.gf?' · usa Google Fonts (necesita internet)':''}${it.dup?' · <b>ya incluida en la versión completa</b> (desmarcada)':''}`;
+  const row=(it,i,loose)=>`<div style="margin:10px 0"><input type="checkbox" data-i="${i}"${it.dup?'':' checked'}> <input class="fi nm" data-i="${i}" value="${esc(it.stem)}" style="width:min(300px,62%);display:inline-block;margin:0"><b>${esc(it.ext)}</b><br><span class="st">${info(it)}</span>${it.title?'<br><span class="st">«'+esc(it.title)+'»</span>':''}${loose?'<br><input class="fi lf" data-i="'+i+'" placeholder="subcarpeta opcional (ej: Descripciones)" style="max-width:360px">':''}</div>`;
+  const gHtml=A.groups.map((g,gi)=>`<div style="border-left:3px solid var(--ac);padding-left:12px;margin:14px 0"><b>🎞 Carrusel detectado</b> <span class="st">· ${g.members.filter(m=>m.role!=='completo').length} láminas${g.members.some(m=>m.role==='completo')?' + versión completa':''}</span><br><span class="st">Subcarpeta del carrusel (vacío = directo en el proyecto):</span><input class="fi gf" data-g="${gi}" value="${A.groups.length>1?esc(g.name):''}">${[...g.members].sort((a,b)=>(b.role==='completo')-(a.role==='completo')).map(m=>row(m,A.items.indexOf(m),false)).join('')}</div>`).join('');
+  const loose=A.items.map((it,i)=>[it,i]).filter(([it])=>it.grp==null);
+  el.innerHTML=`<b>📦 ${esc(file.name)}</b>
+  <div style="margin-top:8px"><span class="st">Guardar dentro de:</span><select class="fi ds">${flat().map(([k])=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(pathOf(k))}</option>`).join('')}</select><span class="st">Nombre del proyecto (carpeta):</span><input class="fi pn" value="${esc(file.name.replace(/\.zip$/i,'').trim())}"></div>
+  ${gHtml}${loose.length?'<div style="margin:14px 0"><b>Otros archivos</b>'+loose.map(([it,i])=>row(it,i,true)).join('')+'</div>':''}
+  <details><summary class="st" style="cursor:pointer">Vista previa de la estructura</summary><pre class="st" style="white-space:pre-wrap;margin:6px 0"></pre></details>
   <div class="st">Se omiten ${A.skip} imagen(es) exportada(s) sin uso en los HTML${A.oth?' y '+A.oth+' archivo(s) de otro tipo':''}.</div>`;
+  const q=x=>el.querySelector(x),sg=v=>v.split('/').map(x=>x.trim()).filter(Boolean),badN=v=>!v||/[\/\\]/.test(v)||v.startsWith('.');
+  const tgt=()=>{const pj=q('.pn').value.trim(),dest=q('.ds').value;let err=badN(pj)?'Nombre de proyecto no válido.':'';
+    const T=A.items.map((it,i)=>{const on=q(`input[type=checkbox][data-i="${i}"]`).checked,stem=q(`.nm[data-i="${i}"]`).value.trim(),
+      fs=sg(it.grp!=null?q(`.gf[data-g="${it.grp}"]`).value:(q(`.lf[data-i="${i}"]`)||{value:''}).value);
+      if(on&&badN(stem))err='Hay un nombre de archivo no válido.';if(on&&fs.some(x=>x.startsWith('.')||/\\/.test(x)))err='Hay un nombre de carpeta no válido.';
+      return{it,on,rel:[pj,...fs,stem+it.ext].join('/'),path:[dest,pj,...fs,stem+it.ext].join('/')}});
+    const on=T.filter(t=>t.on);if(new Set(on.map(t=>t.path)).size<on.length)err='Dos archivos quedarían con la misma ruta.';return{T,err}};
+  const pv=()=>{const{T,err}=tgt();q('pre').textContent=(err?'⚠ '+err+'\n':'')+T.filter(t=>t.on).map(t=>t.rel).sort().join('\n')};
+  el.addEventListener('input',pv);el.addEventListener('change',pv);pv();
   const bt=document.createElement('button');bt.className='btn';bt.textContent='Guardar selección en el repositorio';el.appendChild(bt);
-  bt.onclick=async()=>{const nm=okName(el.querySelector('.pn').value.trim());if(!nm)return;
-    const ch=A.items.filter((_,i)=>el.querySelector(`[data-i="${i}"]`).checked);if(!ch.length)return stat('#sC','No hay archivos seleccionados.','er');
-    const base=sel+'/'+nm,ex=ch.filter(it=>F.some(f=>f.p===base+'/'+it.out));
-    if(ex.length&&!await ask(`${ex.length} archivo(s) ya existen en «${nm}» y se reemplazarán. ¿Continuar?`,'c'))return;
-    await busy('',async()=>{let i=0;for(const it of ch){stat('#sC',`Preparando y subiendo ${++i} de ${ch.length}: ${it.out}`);
-      const t=await A.zip.file(it.path).async('string'),h=it.kind==='html'?await zinline(t,it.dir,A.zip):t,b=new Blob([h],{type:it.kind==='html'?'text/html':'text/plain'});
-      if(b.size>100*1048576){stat('#sC',it.out+' pesa '+fm(b.size)+' (límite de GitHub: 100 MB); se omitió.','er');continue}
-      if(USED+b.size>LIM&&!await ask('Subir «'+it.out+'» superaría el 1 GB recomendado. ¿Continuar?','c'))continue;
-      await put(base+'/'+it.out,b,'Importar '+nm+': '+it.out);USED+=b.size}
-      sel=base;el.remove()})};
+  bt.onclick=async()=>{const{T,err}=tgt();if(err)return stat('#sC',err,'er');const ch=T.filter(t=>t.on);if(!ch.length)return stat('#sC','No hay archivos seleccionados.','er');
+    const pj=q('.pn').value.trim(),ex=ch.filter(t=>F.some(f=>f.p===t.path));
+    if(ex.length&&!await ask(`${ex.length} archivo(s) ya existen y se reemplazarán. ¿Continuar?`,'c'))return;
+    await busy('',async()=>{let i=0;for(const t of ch){const it=t.it;stat('#sC',`Preparando y subiendo ${++i} de ${ch.length}: ${t.rel}`);
+      const x=await A.zip.file(it.path).async('string'),h=it.kind==='html'?await zinline(x,it.dir,A.zip):x,b=new Blob([h],{type:it.kind==='html'?'text/html':'text/plain'});
+      if(b.size>100*1048576){stat('#sC',t.rel+' pesa '+fm(b.size)+' (límite de GitHub: 100 MB); se omitió.','er');continue}
+      if(USED+b.size>LIM&&!await ask('Subir «'+t.rel+'» superaría el 1 GB recomendado. ¿Continuar?','c'))continue;
+      await put(t.path,b,'Importar '+pj+': '+t.rel);USED+=b.size}
+      sel=q('.ds').value+'/'+pj;el.remove()})};
   return el}
 async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar el lector de ZIP (revisa tu conexión).','er');
   for(const f of files){try{stat('#sC','Analizando '+f.name+'…');$('#zres').appendChild(zcard(f,await zanalyze(f)));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
