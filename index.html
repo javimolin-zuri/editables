@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Convertidor HTML ⇄ Illustrator · GitHub</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#F1F4F3;--card:#fff;--tx:#011E2F;--mut:#4F5F5A;--ac:#A9764A;--ln:#d5dcd9;--ok:#2f6b3f;color-scheme:light}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1a22;--card:#12262f;--tx:#eef3f1;--mut:#9fb0aa;--ac:#d9a272;--ln:#25404b;--ok:#7fcf94;color-scheme:dark}}
@@ -62,6 +63,9 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
   <button class="btn" id="g_s">Guardar y conectar</button></details>
  <p class="st" id="sC">Cargando…</p>
  <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir HTML aquí<input type="file" id="up" accept=".html,.htm" multiple class="hide"></label></div>
+ <details id="imp" open style="margin:0 0 14px"><summary style="cursor:pointer;font-weight:600">📦 Importar proyecto desde ZIP</summary>
+  <label class="drop" id="dZ" style="margin-top:10px;padding:22px"><input type="file" accept=".zip" multiple><b>Arrastra uno o varios .zip</b><br>detecta el proyecto, sus HTML y láminas; no guarda los PNG exportados</label>
+  <div class="res" id="zres"></div></details>
  <div id="tree"></div><hr style="border:0;border-top:1px solid var(--ln);margin:14px 0"><div class="res" id="files"></div>
  <ul class="note"><li>Las carpetas de aquí son las carpetas reales de tu repositorio: cada archivo que subes queda como un commit.</li>
  <li>Para guardar un .ai o .svg, conviértelo primero en «Illustrator → HTML» y pulsa «Guardar en biblioteca».</li></ul>
@@ -297,6 +301,52 @@ $('#c').onclick=async e=>{
   else if(act==='rm'&&await ask('¿Eliminar «'+nm+'»? (queda en el historial de Git)','c'))await busy('Eliminando…',()=>del(f));
   }catch(x){stat('#sC','Error: '+x.message,'er')}};
 $('#g_s').onclick=()=>{const g=i=>$('#g_'+i).value.trim();localStorage.setItem('gh',JSON.stringify({o:g('o'),r:g('r'),br:g('br')||'main',b:g('b')||'editables',t:g('t')}));$('#cfg').open=false;sel='';load()};
+/* ---------- Importar ZIP ---------- */
+const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',svg:'image/svg+xml',woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf'};
+const zres=(dir,rp,has)=>{if(/^(https?:|data:|\/\/|#|blob:|mailto:)/i.test(rp.trim()))return null;let p;try{p=decodeURIComponent(rp.split(/[?#]/)[0])}catch(e){return null}
+  const o=[];for(const x of (dir+p).split('/')){if(x==='..')o.pop();else if(x&&x!=='.')o.push(x)}const k=o.join('/');return has(k)?k:null};
+const ZRE=/(\b(?:src|poster|data-src)=["'])([^"']+)(["'])|(url\(\s*["']?)([^)"']+)(["']?\s*\))/gi;
+const zcollect=(h,dir,has)=>{const s=new Set();for(const m of h.matchAll(ZRE)){const k=zres(dir,m[2]||m[5],has);if(k)s.add(k)}return[...s]};
+async function zinline(h,dir,zip){const has=k=>!!zip.file(k),M={};
+  for(const k of zcollect(h,dir,has))M[k]=`data:${MIME[k.split('.').pop().toLowerCase()]||'application/octet-stream'};base64,`+await zip.file(k).async('base64');
+  return h.replace(ZRE,(a,p1,p2,p3,p4,p5,p6)=>{const k=zres(dir,p2||p5,has);return k?(p2?p1+M[k]+p3:p4+M[k]+p6):a})}
+async function zanalyze(file){
+  const zip=await JSZip.loadAsync(file),ents=Object.values(zip.files).filter(e=>!e.dir&&!e.name.includes('__MACOSX/')&&!e.name.split('/').pop().startsWith('.')),has=k=>!!zip.file(k);
+  const items=[],used=new Set(),sz={};let imgs=0,oth=0;
+  for(const e of ents){const ext=e.name.split('.').pop().toLowerCase(),dir=e.name.includes('/')?e.name.slice(0,e.name.lastIndexOf('/')+1):'';
+    if(/^html?$/.test(ext)){const t=await e.async('string'),refs=zcollect(t,dir,has);let est=t.length;
+      for(const r of refs){used.add(r);if(sz[r]==null)sz[r]=(await zip.file(r).async('uint8array')).length;est+=sz[r]*1.37}
+      items.push({path:e.name,dir,kind:'html',secs:Math.max(1,(t.match(/<section\b/gi)||[]).length),est,refs,title:((t.match(/<title>([^<]*)/i)||[])[1]||'').trim(),gf:/fonts\.googleapis\.com/.test(t)})}
+    else if(/^(txt|md)$/.test(ext))items.push({path:e.name,dir,kind:'txt',secs:0,est:(await e.async('uint8array')).length,refs:[]});
+    else if(MIME[ext])imgs++;else oth++}
+  items.forEach(it=>it.out=it.path.split('/').pop());
+  items.forEach(it=>{if(items.filter(x=>x.out===it.out).length>1)it.out=it.path.replace(/\//g,'_')});
+  const hs=items.filter(i=>i.kind==='html');
+  for(const d of new Set(hs.map(i=>i.dir))){const g=hs.filter(i=>i.dir===d),multi=g.filter(i=>i.secs>1),one=g.filter(i=>i.secs===1);
+    const m=multi.find(x=>x.secs===one.length);if(m&&one.length>1)one.forEach(i=>i.dup=m.out)}
+  return{zip,items,skip:Math.max(0,imgs-[...used].filter(u=>MIME[u.split('.').pop().toLowerCase()]).length),oth}}
+function zcard(file,A){const el=document.createElement('div');el.className='row';el.style.display='block';
+  el.innerHTML=`<b>📦 ${esc(file.name)}</b><br><span class="st">Nombre del proyecto (carpeta):</span><input class="fi pn" value="${esc(file.name.replace(/\.zip$/i,'').trim())}">
+  <div class="st">Se creará dentro de «${esc(pathOf(sel))}» (la carpeta seleccionada en el árbol).</div>
+  ${A.items.map((it,i)=>`<label style="display:block;margin:8px 0"><input type="checkbox" data-i="${i}"${it.dup?'':' checked'}> <b>${esc(it.out)}</b> <span class="st">· ${it.kind==='html'?(it.secs>1?it.secs+' láminas juntas':'1 lámina'):'texto'} · ${fm(it.est)}${it.refs.length?' · incrusta '+it.refs.length+' imagen(es)':''}${it.gf?' · usa Google Fonts (necesita internet)':''}${it.dup?' · <b>ya incluida en «'+esc(it.dup)+'»</b> (desmarcada)':''}</span>${it.title?'<br><span class="st">«'+esc(it.title)+'»</span>':''}</label>`).join('')||'<p class="st">No se encontraron HTML.</p>'}
+  <div class="st">Se omiten ${A.skip} imagen(es) exportada(s) sin uso en los HTML${A.oth?' y '+A.oth+' archivo(s) de otro tipo':''}.</div>`;
+  const bt=document.createElement('button');bt.className='btn';bt.textContent='Guardar selección en el repositorio';el.appendChild(bt);
+  bt.onclick=async()=>{const nm=okName(el.querySelector('.pn').value.trim());if(!nm)return;
+    const ch=A.items.filter((_,i)=>el.querySelector(`[data-i="${i}"]`).checked);if(!ch.length)return stat('#sC','No hay archivos seleccionados.','er');
+    const base=sel+'/'+nm,ex=ch.filter(it=>F.some(f=>f.p===base+'/'+it.out));
+    if(ex.length&&!await ask(`${ex.length} archivo(s) ya existen en «${nm}» y se reemplazarán. ¿Continuar?`,'c'))return;
+    await busy('',async()=>{let i=0;for(const it of ch){stat('#sC',`Preparando y subiendo ${++i} de ${ch.length}: ${it.out}`);
+      const t=await A.zip.file(it.path).async('string'),h=it.kind==='html'?await zinline(t,it.dir,A.zip):t,b=new Blob([h],{type:it.kind==='html'?'text/html':'text/plain'});
+      if(b.size>100*1048576){stat('#sC',it.out+' pesa '+fm(b.size)+' (límite de GitHub: 100 MB); se omitió.','er');continue}
+      if(USED+b.size>LIM&&!await ask('Subir «'+it.out+'» superaría el 1 GB recomendado. ¿Continuar?','c'))continue;
+      await put(base+'/'+it.out,b,'Importar '+nm+': '+it.out);USED+=b.size}
+      sel=base;el.remove()})};
+  return el}
+async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar el lector de ZIP (revisa tu conexión).','er');
+  for(const f of files){try{stat('#sC','Analizando '+f.name+'…');$('#zres').appendChild(zcard(f,await zanalyze(f)));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
+(()=>{const z=$('#dZ'),i=z.querySelector('input');i.onchange=()=>{zadd([...i.files]);i.value=''};
+  z.ondragover=e=>{e.preventDefault();z.classList.add('hv')};z.ondragleave=()=>z.classList.remove('hv');
+  z.ondrop=e=>{e.preventDefault();z.classList.remove('hv');zadd([...e.dataTransfer.files].filter(f=>/\.zip$/i.test(f.name)))}})();
 (()=>{const c=CF();['o','r','br','b','t'].forEach(k=>{if(c[k])$('#g_'+k).value=c[k]})})();
 load();
 </script></body></html>
