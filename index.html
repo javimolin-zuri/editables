@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Convertidor HTML ⇄ Illustrator · GitHub</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#F1F4F3;--card:#fff;--tx:#011E2F;--mut:#4F5F5A;--ac:#A9764A;--ln:#d5dcd9;--ok:#2f6b3f;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1a22;--card:#12262f;--tx:#eef3f1;--mut:#9fb0aa;--ac:#d9a272;--ln:#25404b;--ok:#7fcf94;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0b1a22;--card:#12262f;--tx:#eef3f1;--mut:#9fb0aa;--ac:#d9a272;--ln:#25404b;--ok:#7fcf94;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif}
+main{max-width:860px;margin:0 auto;padding:28px 18px 60px}
+h1{font:600 28px/1.15 Georgia,serif;margin:0 0 6px}p.s{color:var(--mut);margin:0 0 22px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tabs button{flex:1;min-width:200px;padding:12px;border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:12px;font:600 15px inherit;cursor:pointer}
+.tabs button.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:16px;padding:20px}
+.drop{display:block;border:2px dashed var(--ln);border-radius:14px;padding:34px 16px;text-align:center;cursor:pointer;color:var(--mut)}
+.drop.hv,.drop:hover{border-color:var(--ac);color:var(--tx)}.drop input{display:none}.drop b{color:var(--tx)}
+.st{margin:14px 0 0;color:var(--mut);font-size:14px;min-height:20px}.st.ok{color:var(--ok)}.st.er{color:#c0392b}
+.res{display:grid;gap:14px;margin-top:16px}
+.row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid var(--ln);border-radius:12px;padding:12px}
+.row img{max-height:150px;max-width:130px;border:1px solid var(--ln);border-radius:6px;background:#fff}
+.row div{flex:1;min-width:180px}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 16px;font:600 14px inherit;cursor:pointer;margin:4px 6px 0 0}
+.btn.g{background:transparent;color:var(--tx);border:1px solid var(--ln)}
+.fo{padding:6px 8px;border-radius:8px;cursor:pointer}.fo:hover{background:var(--bg)}.fo.on{background:var(--tx);color:var(--bg)}.fo.on .st{color:inherit}
+dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);color:var(--tx);padding:18px;min-width:min(340px,90vw)}dialog input,dialog select{width:100%;margin:10px 0;padding:10px;border-radius:8px;border:1px solid var(--ln);background:var(--bg);color:var(--tx);font:inherit}
+.fi{width:100%;margin:5px 0;padding:10px;border-radius:8px;border:1px solid var(--ln);background:var(--bg);color:var(--tx);font:inherit}
+.note{font-size:13.5px;color:var(--mut);margin-top:18px}.note li{margin:4px 0}.hide{display:none}
+</style></head><body><main>
+<h1>Convertidor HTML ⇄ Illustrator</h1>
+<p class="s">Sube tu lámina en HTML y obtén un archivo vectorial editable (capas, textos vivos, formas, imágenes). También puedes hacer el camino inverso.</p>
+<div class="tabs"><button class="on" data-t="a">HTML → Illustrator</button><button data-t="b">Illustrator (.ai / SVG) → HTML</button><button data-t="c">📁 Mi biblioteca</button></div>
+
+<section class="card" id="a">
+ <label class="drop" id="dA"><input type="file" accept=".html,.htm"><b>Arrastra tu .html aquí</b><br>o haz clic para elegirlo</label>
+ <p class="st" id="sA"></p><div class="res" id="rA"></div>
+ <ul class="note">
+  <li>Cada elemento queda como <b>capa propia</b> (se ven en el panel Capas de Illustrator) y cada línea de texto como <b>texto editable</b>.</li>
+  <li>En Illustrator: abre el SVG → <i>Archivo › Guardar como</i> → <b>.ai</b> o <b>PDF</b> con «Conservar capacidades de edición de Illustrator». Esa es la ruta para obtener un PDF/AI editable.</li>
+  <li>Las tipografías no viajan dentro de Illustrator: instala las fuentes que aparecen abajo (se extraen de tu HTML) antes de abrir el SVG.</li>
+  <li>No se convierten: transformaciones (rotate/scale), filtros CSS, pseudo-elementos y sombras de texto.</li>
+ </ul>
+</section>
+
+<section class="card hide" id="b">
+ <label class="drop" id="dB"><input type="file" accept=".ai,.pdf,.svg"><b>Arrastra tu .ai (o .pdf / .svg) aquí</b><br>cada mesa de trabajo pasa a ser una sección del HTML</label>
+ <p class="st" id="sB"></p><div class="res" id="rB"></div>
+ <ul class="note">
+  <li><b>.ai:</b> se lee a través de su contenido compatible con PDF. Cada página detectada = una mesa de trabajo, en orden, dentro de un solo HTML. Revisa que el número de mesas coincida con el de tu archivo; si faltan, vuelve a guardar en Illustrator con <i>«Crear archivo compatible con PDF»</i> activado.</li>
+  <li>Por esta vía las capas de Illustrator <b>no se conservan</b> (el PDF las aplana en grupos por orden de pintado). Los textos se mantienen como texto, pero con fuentes subconjunto (solo los caracteres usados). Si necesitas capas exactas, exporta desde Illustrator a <b>SVG</b> y sube ese archivo.</li>
+  <li>El HTML resultante contiene el SVG en línea: textos, trazados, grupos y capas (ids) siguen siendo elementos editables del código. Si el SVG trae fuentes embebidas, se conservan.</li>
+ </ul>
+</section>
+<section class="card hide" id="c">
+ <details id="cfg" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">⚙ Conexión con GitHub</summary>
+  <p class="st">Usa un repositorio <b>privado</b> solo para tus editables (la página puede estar en otro repositorio). Crea un token en GitHub › Settings › Developer settings › Fine-grained tokens, limitado a ese repositorio, con permiso <b>Contents: Read and write</b>. El token se guarda solo en este navegador.</p>
+  <input class="fi" id="g_o" placeholder="Usuario u organización (owner)"><input class="fi" id="g_r" placeholder="Nombre del repositorio"><input class="fi" id="g_br" placeholder="Rama (main)"><input class="fi" id="g_b" placeholder="Carpeta base (editables)"><input class="fi" id="g_t" type="password" placeholder="Token de acceso">
+  <button class="btn" id="g_s">Guardar y conectar</button></details>
+ <p class="st" id="sC">Cargando…</p>
+ <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir HTML aquí<input type="file" id="up" accept=".html,.htm" multiple class="hide"></label></div>
+ <div id="tree"></div><hr style="border:0;border-top:1px solid var(--ln);margin:14px 0"><div class="res" id="files"></div>
+ <ul class="note"><li>Las carpetas de aquí son las carpetas reales de tu repositorio: cada archivo que subes queda como un commit.</li>
+ <li>Para guardar un .ai o .svg, conviértelo primero en «Illustrator → HTML» y pulsa «Guardar en biblioteca».</li></ul>
+</section>
+<dialog id="dlg"><div id="dt"></div><input id="di"><select id="ds"></select><div><button class="btn" id="ok">Aceptar</button><button class="btn g" id="no">Cancelar</button></div></dialog>
+</main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function save(name,data){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data]));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  ['a','b','c'].forEach(k=>$('#'+k).classList.toggle('hide',b.dataset.t!==k))});
+const showTab=t=>document.querySelector(`.tabs button[data-t="${t}"]`).click();
+function wire(id,fn){const z=$(id),i=z.querySelector('input');
+  i.onchange=()=>i.files[0]&&fn(i.files[0]);
+  z.ondragover=e=>{e.preventDefault();z.classList.add('hv')};z.ondragleave=()=>z.classList.remove('hv');
+  z.ondrop=e=>{e.preventDefault();z.classList.remove('hv');e.dataTransfer.files[0]&&fn(e.dataTransfer.files[0])}}
+const stat=(id,t,c='')=>{const s=$(id);s.textContent=t;s.className='st '+c};
+const b64=u=>new Promise(r=>{const f=new FileReader;f.onload=()=>r(f.result);f.readAsDataURL(new Blob([u],{type:'image/svg+xml'}))});
+
+/* ---------- HTML -> SVG ---------- */
+const col=c=>{const m=c.match(/[\d.]+/g);return c.startsWith('rgb')?[`rgb(${m[0]},${m[1]},${m[2]})`,m[3]??1]:[c,1]};
+const split=s=>{let d=0,o=[],c='';for(const ch of s){if(ch=='(')d++;if(ch==')')d--;if(ch==','&&!d){o.push(c.trim());c=''}else c+=ch}o.push(c.trim());return o};
+const grad=(bi,id)=>{const p=split(bi.slice(bi.indexOf('(')+1,bi.lastIndexOf(')')));let a=180;
+  if(/^(-?[\d.]+deg|to )/.test(p[0])){const q=p.shift();a=q.startsWith('to ')?({'to top':0,'to right':90,'to bottom':180,'to left':270})[q]??180:parseFloat(q)}
+  const st=p.map(t=>{const m=t.match(/^(rgba?\([^)]+\)|#[0-9a-f]+|[a-z]+)\s*([\d.]+)?/i);return{c:col(m[1]),o:m[2]!=null?m[2]/100:null}});
+  st.forEach((s,i)=>{if(s.o==null)s.o=i/(st.length-1||1)});
+  const r=a*Math.PI/180,dx=Math.sin(r)/2,dy=-Math.cos(r)/2;
+  return `<linearGradient id="${id}" x1="${.5-dx}" y1="${.5-dy}" x2="${.5+dx}" y2="${.5+dy}">${st.map(s=>`<stop offset="${s.o}" stop-color="${s.c[0]}" stop-opacity="${s.c[1]}"/>`).join('')}</linearGradient>`};
+
+function build(sec,d,w,fontCss){
+  const R=sec.getBoundingClientRect(),cv=d.createElement('canvas').getContext('2d');
+  let out='',defs='',n=0;
+  const rel=r=>({x:r.left-R.left,y:r.top-R.top,w:r.width,h:r.height});
+  const clipOf=(el,b)=>{let x0=b.x,y0=b.y,x1=b.x+b.w,y1=b.y+b.h;
+    for(let p=el.parentElement;p&&p!==sec.parentElement;p=p.parentElement)
+      if(w.getComputedStyle(p).overflow!=='visible'){const q=rel(p.getBoundingClientRect());x0=Math.max(x0,q.x);y0=Math.max(y0,q.y);x1=Math.min(x1,q.x+q.w);y1=Math.min(y1,q.y+q.h)}
+    return{x:x0,y:y0,w:Math.max(0,x1-x0),h:Math.max(0,y1-y0)}};
+  const text=(node,cs)=>{let g='';const s=node.textContent,re=/\S+/g,rg=d.createRange(),L={};let m;
+    while(m=re.exec(s)){rg.setStart(node,m.index);rg.setEnd(node,m.index+m[0].length);const r=rg.getBoundingClientRect();
+      if(!r.width)continue;(L[Math.round(r.top)]??=[]).push({r,t:m[0]})}
+    cv.font=`${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const me=cv.measureText('Hg'),asc=me.fontBoundingBoxAscent,dsc=me.fontBoundingBoxDescent,[fc,fo]=col(cs.color);
+    for(const k in L){const a=L[k],r=a[0].r;let t=a.map(x=>x.t).join(' ');
+      if(cs.textTransform==='uppercase')t=t.toUpperCase();else if(cs.textTransform==='lowercase')t=t.toLowerCase();
+      const y=r.top-R.top+(r.height-(asc+dsc))/2+asc,ls=parseFloat(cs.letterSpacing);
+      g+=`<text x="${(r.left-R.left).toFixed(2)}" y="${y.toFixed(2)}" font-family="${esc(cs.fontFamily.replace(/"/g,"'"))}" font-size="${cs.fontSize}" font-weight="${cs.fontWeight}" font-style="${cs.fontStyle}"${ls?` letter-spacing="${ls}"`:''} fill="${fc}"${fo<1?` fill-opacity="${fo}"`:''} xml:space="preserve">${esc(t).replace(/>/g,'&gt;')}</text>`}
+    return g};
+  const walk=el=>{
+    const cs=w.getComputedStyle(el),tag=el.tagName.toLowerCase();
+    if(cs.display==='none'||cs.visibility==='hidden'||/^(style|script|br)$/.test(tag))return;
+    const id=((el.id||el.classList[0]||tag)+'_'+(++n)).replace(/[^\w-]/g,'_');let g='';
+    if(el instanceof w.SVGElement){if(tag!=='svg')return;const b=rel(el.getBoundingClientRect()),c=el.cloneNode(true);
+      c.setAttribute('x',b.x);c.setAttribute('y',b.y);c.setAttribute('width',b.w);c.setAttribute('height',b.h);c.removeAttribute('style');
+      out+=`<g id="${id}">${new XMLSerializer().serializeToString(c)}</g>`;return}
+    const bg=cs.backgroundColor,bi=cs.backgroundImage,bw=parseFloat(cs.borderTopWidth)||0,hasBg=bg!=='rgba(0, 0, 0, 0)',hasGr=bi.includes('gradient'),sh=cs.boxShadow;
+    if(hasBg||hasGr||bw||sh!=='none')for(const q of el.getClientRects()){const b=rel(q),rx=parseFloat(cs.borderTopLeftRadius)||0,
+      geo=`x="${b.x.toFixed(2)}" y="${b.y.toFixed(2)}" width="${b.w.toFixed(2)}" height="${b.h.toFixed(2)}" rx="${rx}"`;
+      if(hasBg||sh!=='none'){const [f,o]=col(bg);let fl='';
+        if(sh!=='none'){const c=col(sh.match(/rgba?\([^)]+\)/)[0]),v=(sh.replace(/rgba?\([^)]+\)/,'').match(/-?[\d.]+px/g)||[]).map(parseFloat);
+          const fid='f'+n;defs+=`<filter id="${fid}" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="${v[0]||0}" dy="${v[1]||0}" stdDeviation="${(v[2]||0)/2}" flood-color="${c[0]}" flood-opacity="${c[1]}"/></filter>`;fl=` filter="url(#${fid})"`}
+        g+=`<rect ${geo} fill="${hasBg?f:'none'}"${hasBg&&o<1?` fill-opacity="${o}"`:''}${fl}/>`}
+      if(hasGr){const gid='g'+n+'_'+Math.random().toString(36).slice(2,6);defs+=grad(bi,gid);g+=`<rect ${geo} fill="url(#${gid})"/>`}
+      if(bw)g+=`<rect ${geo} fill="none" stroke="${col(cs.borderTopColor)[0]}" stroke-width="${bw}"/>`}
+    if(tag==='img'){const b=rel(el.getBoundingClientRect()),c=clipOf(el,b),fit=({cover:'slice',contain:'meet'})[cs.objectFit]||'none';
+      const [px,py]=cs.objectPosition.split(' ').map(parseFloat),ax=px<25?'xMin':px>75?'xMax':'xMid',ay=py<25?'YMin':py>75?'YMax':'YMid';
+      defs+=`<clipPath id="c${n}"><rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}"/></clipPath>`;
+      g+=`<image href="${esc(el.currentSrc||el.src)}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" preserveAspectRatio="${fit==='none'?'none':ax+ay+' '+fit}" clip-path="url(#c${n})"/>`}
+    for(const nd of el.childNodes)if(nd.nodeType===3&&nd.textContent.trim())g+=text(nd,cs);
+    if(g)out+=`<g id="${id}"${cs.opacity!=='1'?` opacity="${cs.opacity}"`:''}>${g}</g>`;
+    for(const c of el.children)walk(c)};
+  walk(sec);
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${R.width}" height="${R.height}" viewBox="0 0 ${R.width} ${R.height}"><defs><style><![CDATA[${fontCss}]]></style>${defs}</defs>${out}</svg>`}
+
+wire('#dA',async f=>{
+  $('#rA').innerHTML='';stat('#sA','Procesando…');
+  try{
+    const txt=await f.text(),fr=document.createElement('iframe');
+    fr.sandbox='allow-same-origin';fr.style.cssText='position:fixed;left:-9999px;top:0;width:1200px;height:1600px;border:0';
+    fr.srcdoc=txt;document.body.appendChild(fr);await new Promise(r=>fr.onload=r);
+    const d=fr.contentDocument,w=fr.contentWindow;await d.fonts.ready;await new Promise(r=>setTimeout(r,150));
+    const faces=[];for(const sh of d.styleSheets)for(const r of sh.cssRules)if(r.type===5)faces.push(r);
+    const fontCss=faces.map(r=>r.cssText).join('\n');
+    let secs=[...d.body.children].filter(e=>e.getBoundingClientRect().height>0&&!/^(script|style)$/i.test(e.tagName));
+    if(!secs.length)secs=[d.body];
+    const base=f.name.replace(/\.[^.]+$/,''),res=$('#rA');
+    for(let i=0;i<secs.length;i++){
+      const svg=build(secs[i],d,w,fontCss),name=base+(secs.length>1?'_'+(i+1):'')+'.svg',row=document.createElement('div');
+      row.className='row';row.innerHTML=`<img alt=""><div><b>${esc(name)}</b><br><span class="st">${secs[i].getBoundingClientRect().width}×${secs[i].getBoundingClientRect().height}px · ${(svg.length/1048576).toFixed(1)} MB</span><br></div>`;
+      const bt=document.createElement('button');bt.className='btn';bt.textContent='Descargar SVG para Illustrator';bt.onclick=()=>save(name,svg);
+      row.lastChild.appendChild(bt);res.appendChild(row);b64(svg).then(u=>row.querySelector('img').src=u)}
+    const fl=document.createElement('div');fl.className='row';fl.innerHTML='<div><b>Tipografías de tu archivo</b><br><span class="st">Instálalas antes de abrir el SVG en Illustrator.</span><br></div>';
+    let nf=0;for(const r of faces){const m=r.cssText.match(/url\(["']?data:([^;]*);base64,([^"')]+)/);
+      if(!m||!/ttf|truetype/i.test(m[1]))continue;nf++;
+      const fam=r.style.fontFamily.replace(/["']/g,''),bt=document.createElement('button');bt.className='btn g';bt.textContent='Descargar '+fam+'.ttf';
+      bt.onclick=()=>save(fam.replace(/\s+/g,'')+'.ttf',Uint8Array.from(atob(m[2]),c=>c.charCodeAt(0)));fl.lastChild.appendChild(bt)}
+    if(nf)res.appendChild(fl);
+    addSaveRow($('#rA'),f.name,txt);fr.remove();stat('#sA','Listo: '+secs.length+(secs.length>1?' láminas convertidas.':' lámina convertida.'),'ok');
+  }catch(e){console.error(e);stat('#sA','No se pudo convertir: '+e.message,'er')}
+});
+
+/* ---------- AI/PDF -> HTML (multi-mesa) ---------- */
+async function aiToHtml(f){
+  stat('#sB','Leyendo archivo…');
+  try{
+    if(!window.pdfjsLib||!pdfjsLib.SVGGraphics)throw new Error('no se pudo cargar el lector (revisa tu conexión)');
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    let pdf;try{pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise}
+    catch(e){throw new Error('este .ai no trae contenido compatible con PDF. Guárdalo de nuevo con «Crear archivo compatible con PDF» o expórtalo como SVG')}
+    const faces=new Map(),secs=[];
+    for(let i=1;i<=pdf.numPages;i++){
+      stat('#sB',`Convirtiendo mesa ${i} de ${pdf.numPages}…`);
+      const page=await pdf.getPage(i),vp=page.getViewport({scale:1}),g=new pdfjsLib.SVGGraphics(page.commonObjs,page.objs);g.embedFonts=true;
+      let s=new XMLSerializer().serializeToString(await g.getSVG(await page.getOperatorList(),vp));
+      const ids=new Set([...s.matchAll(/ id="([^"]+)"/g)].map(m=>m[1]));
+      for(const x of ids)s=s.split(` id="${x}"`).join(` id="m${i}-${x}"`).split(`url(#${x})`).join(`url(#m${i}-${x})`).split(`href="#${x}"`).join(`href="#m${i}-${x}"`);
+      s=s.replace(/<style[^>]*>([\s\S]*?)<\/style>/g,(_,c)=>{const rest=c.replace(/@font-face\s*\{[^}]*\}/g,r=>{faces.set((r.match(/font-family:\s*([^;}]+)/)||[])[1]||r,r);return ''});return rest.trim()?`<style>${rest}</style>`:''});
+      secs.push(`<section id="mesa-${i}" style="width:${vp.width}px;height:${vp.height}px">\n${s}\n</section>`)}
+    const base=f.name.replace(/\.[^.]+$/,'');
+    const html=`<!doctype html>\n<html lang="es"><head><meta charset="utf-8"><title>${esc(base)}</title>\n<style>${[...faces.values()].join('\n')}\nhtml,body{margin:0}body{background:#fff}section{position:relative;overflow:hidden}svg{display:block}</style></head>\n<body>\n${secs.join('\n')}\n</body></html>`;
+    const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<div><b>${esc(base)}.html</b><br><span class="st">${pdf.numPages} mesa(s) de trabajo · original ${(f.size/1048576).toFixed(2)} MB → HTML ${(html.length/1048576).toFixed(2)} MB</span><br></div>`;
+    const bt=document.createElement('button');bt.className='btn';bt.textContent='Descargar HTML';bt.onclick=()=>save(base+'.html',html);
+    row.lastChild.appendChild(bt);$('#rB').appendChild(row);addSave(row.lastChild,base+'.html',html);
+    stat('#sB',`Listo: ${pdf.numPages} mesa(s) convertida(s). Verifica que coincida con las de tu archivo.`,'ok');
+  }catch(e){console.error(e);stat('#sB','No se pudo convertir: '+e.message,'er')}
+}
+
+/* ---------- SVG -> HTML ---------- */
+wire('#dB',async f=>{
+  $('#rB').innerHTML='';
+  if(/\.(ai|pdf)$/i.test(f.name))return aiToHtml(f);
+  try{
+    let t=await f.text();const doc=new DOMParser().parseFromString(t,'image/svg+xml');
+    if(doc.querySelector('parsererror')||doc.documentElement.tagName.toLowerCase()!=='svg')throw new Error('el archivo no es un SVG válido');
+    t=t.replace(/<\?xml[\s\S]*?\?>/,'').replace(/<!DOCTYPE[\s\S]*?>\s*/i,'').trim();
+    const base=f.name.replace(/\.[^.]+$/,''),html=`<!doctype html>\n<html lang="es"><head><meta charset="utf-8"><title>${esc(base)}</title>\n<style>html,body{margin:0}body{background:#fff}svg{display:block}</style></head>\n<body>\n${t}\n</body></html>`;
+    const row=document.createElement('div');row.className='row';
+    row.innerHTML=`<img alt=""><div><b>${esc(base)}.html</b><br><span class="st">${(html.length/1048576).toFixed(2)} MB · SVG en línea con capas y textos editables</span><br></div>`;
+    const bt=document.createElement('button');bt.className='btn';bt.textContent='Descargar HTML';bt.onclick=()=>save(base+'.html',html);
+    row.lastChild.appendChild(bt);$('#rB').appendChild(row);addSave(row.lastChild,base+'.html',html);b64(t).then(u=>row.querySelector('img').src=u);
+    stat('#sB','Listo.','ok');
+  }catch(e){stat('#sB','No se pudo convertir: '+e.message,'er')}
+});
+
+/* ---------- Biblioteca (GitHub) ---------- */
+let F=[],sel='',BASE='editables';
+const CF=()=>{try{return JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){return{}}};
+const BR=()=>CF().br||'main',enc=p=>p.split('/').map(encodeURIComponent).join('/');
+async function gh(p,o={}){const c=CF(),r=await fetch(`https://api.github.com/repos/${c.o}/${c.r}${p}`,{...o,headers:{Authorization:'Bearer '+c.t,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(o.headers||{})}});
+  if(!r.ok){let m=r.status;try{m+=' '+(await r.json()).message}catch(e){}throw new Error(m)}return r}
+const toB64=b=>new Promise(r=>{const f=new FileReader;f.onload=()=>r(f.result.split(',')[1]);f.readAsDataURL(b)});
+async function put(path,blob,msg){const ex=F.find(f=>f.p===path),body={message:msg||'Agregar '+path,content:await toB64(blob),branch:BR()};if(ex)body.sha=ex.sha;
+  await gh('/contents/'+enc(path),{method:'PUT',body:JSON.stringify(body)})}
+const del=f=>gh('/contents/'+enc(f.p),{method:'DELETE',body:JSON.stringify({message:'Eliminar '+f.p,sha:f.sha,branch:BR()})});
+const raw=async p=>(await gh('/contents/'+enc(p)+'?ref='+encodeURIComponent(BR()),{headers:{Accept:'application/vnd.github.raw+json'}})).text();
+const mv=async(f,np)=>{const t=f.p.endsWith('.gitkeep')?'\n':await raw(f.p);await put(np,new Blob([t]),'Mover '+f.p+' → '+np);await del(f)};
+const dirs=()=>{const D=new Set([BASE]);F.forEach(f=>{const q=f.p.split('/');for(let i=1;i<q.length;i++)D.add(q.slice(0,i).join('/'))});return[...D].filter(d=>d.startsWith(BASE))};
+const kids=p=>dirs().filter(d=>d.startsWith(p+'/')&&!d.slice(p.length+1).includes('/')).sort((a,b)=>a.localeCompare(b));
+const flat=(p=BASE,d=0,o=[])=>{o.push([p,d]);kids(p).forEach(k=>flat(k,d+1,o));return o};
+const pathOf=k=>k===BASE?BASE:k.slice(BASE.length+1).replace(/\//g,' / ');
+const dirOf=p=>p.slice(0,p.lastIndexOf('/')),vis=f=>!f.p.endsWith('/.gitkeep');
+function ask(t,mode,def=''){return new Promise(r=>{const D=$('#dlg'),i=$('#di'),s=$('#ds');$('#dt').textContent=t;
+  i.style.display=mode==='t'?'':'none';s.style.display=mode==='s'?'':'none';i.value=def;
+  if(mode==='s')s.innerHTML=flat().map(([k])=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(pathOf(k))}</option>`).join('');
+  const end=v=>{r(v);D.close()};D.onclose=()=>r(null);
+  $('#ok').onclick=()=>end(mode==='t'?(i.value.trim()||null):mode==='s'?s.value:true);$('#no').onclick=()=>end(null);D.showModal()})}
+const okName=n=>n&&!/[\/\\]/.test(n)&&!n.startsWith('.')?n:(stat('#sC','Nombre no válido (sin «/» ni punto inicial).','er'),null);
+async function load(){
+  const c=CF();BASE=(c.b||'editables').replace(/^\/+|\/+$/g,'');
+  if(!c.t||!c.o||!c.r){stat('#sC','Configura tu repositorio y token en «Conexión con GitHub».','er');$('#cfg').open=true;F=[];return draw()}
+  stat('#sC','Leyendo repositorio…');
+  try{const tr=await(await gh('/git/trees/'+encodeURIComponent(BR())+'?recursive=1')).json();
+    F=tr.tree.filter(e=>e.type==='blob'&&e.path.startsWith(BASE+'/')).map(e=>({p:e.path,s:e.size,sha:e.sha}));
+    if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (${BR()}) · ${F.filter(vis).length} archivo(s).`,'ok')}
+  catch(e){F=[];sel=BASE;stat('#sC',/40[49]/.test(e.message)?'El repositorio está vacío, o la rama/permisos no son correctos ('+e.message+'). Sube un archivo para empezar.':'Error: '+e.message,'er')}
+  draw()}
+function draw(){
+  if(!sel)sel=BASE;
+  const cnt=k=>F.filter(f=>vis(f)&&dirOf(f.p)===k).length;
+  $('#tree').innerHTML=flat().map(([k,d])=>`<div class="fo${k===sel?' on':''}" data-fk="${esc(k)}" style="padding-left:${d*18+8}px">📁 ${esc(k.split('/').pop())} <span class="st">(${cnt(k)})</span></div>`).join('');
+  const fs=F.filter(f=>vis(f)&&dirOf(f.p)===sel).sort((x,y)=>x.p.localeCompare(y.p));
+  $('#files').innerHTML=fs.length?fs.map(f=>`<div class="row"><div><b>${esc(f.p.split('/').pop())}</b><br><span class="st">${(f.s/1048576).toFixed(2)} MB</span><br>
+   <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar HTML</button><button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button><button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
+const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){stat('#sC','Error: '+e.message,'er');await load().catch(()=>{})}};
+async function saveToLib(name,html){
+  const f=await ask('Guardar «'+name+'» en la carpeta:','s');if(!f)return;const path=f+'/'+name;
+  if(F.some(x=>x.p===path)&&!await ask('«'+name+'» ya existe en esa carpeta. ¿Reemplazarlo?','c'))return;
+  sel=f;showTab('c');await busy('Subiendo «'+name+'» al repositorio…',()=>put(path,new Blob([html],{type:'text/html'})))}
+function addSave(c,name,html){const b=document.createElement('button');b.className='btn g';b.textContent='Guardar en biblioteca';b.onclick=()=>saveToLib(name,html);c.appendChild(b)}
+function addSaveRow(res,name,html){const r=document.createElement('div');r.className='row';r.innerHTML='<div><b>Archivo original</b><br><span class="st">Guarda tu editable en HTML en tu repositorio.</span><br></div>';addSave(r.lastChild,name,html);res.appendChild(r)}
+$('#nf').onclick=async()=>{const n=okName(await ask('Nombre de la nueva carpeta (dentro de «'+pathOf(sel)+'»)','t'));if(n){const p=sel+'/'+n;sel=p;await busy('Creando carpeta…',()=>put(p+'/.gitkeep',new Blob(['\n']),'Crear carpeta '+p))}};
+$('#rf').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no se puede renombrar.','er');
+  const n=okName(await ask('Nuevo nombre de la carpeta','t',sel.split('/').pop()));if(!n)return;const np=dirOf(sel)+'/'+n,old=sel,fl=F.filter(f=>f.p.startsWith(old+'/'));
+  await busy('',async()=>{let i=0;for(const f of fl){stat('#sC',`Moviendo ${++i} de ${fl.length}…`);await mv(f,np+f.p.slice(old.length))}sel=np})};
+$('#df').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no se puede eliminar.','er');
+  const fl=F.filter(f=>f.p.startsWith(sel+'/'));if(!await ask(`¿Eliminar «${pathOf(sel)}» con ${fl.filter(vis).length} archivo(s)? (queda en el historial de Git)`,'c'))return;
+  const par=dirOf(sel);await busy('',async()=>{let i=0;for(const f of fl){stat('#sC',`Eliminando ${++i} de ${fl.length}…`);await del(f)}sel=par})};
+$('#rl').onclick=load;
+$('#up').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await busy('',async()=>{let i=0;for(const f of fs){stat('#sC',`Subiendo ${++i} de ${fs.length}: ${f.name}`);await put(sel+'/'+f.name,f)}})};
+$('#c').onclick=async e=>{
+  const fk=e.target.closest('[data-fk]');if(fk){sel=fk.dataset.fk;return draw()}
+  const bt=e.target.closest('[data-a]');if(!bt)return;const f=F.find(x=>x.p===bt.dataset.k),act=bt.dataset.a,nm=f.p.split('/').pop();
+  try{
+  if(act==='dl'){stat('#sC','Descargando…');save(nm,await raw(f.p));stat('#sC','Listo.','ok')}
+  else if(act==='ai'){stat('#sC','Preparando…');const t=await raw(f.p),dt=new DataTransfer(),inp=$('#dA input');dt.items.add(new File([t],nm,{type:'text/html'}));inp.files=dt.files;showTab('a');inp.onchange()}
+  else if(act==='mv'){const d=await ask('Mover a la carpeta:','s');if(d&&d!==dirOf(f.p))await busy('Moviendo…',()=>mv(f,d+'/'+nm))}
+  else if(act==='rn'){const n=okName(await ask('Nuevo nombre','t',nm));if(n&&n!==nm)await busy('Renombrando…',()=>mv(f,dirOf(f.p)+'/'+n))}
+  else if(act==='rm'&&await ask('¿Eliminar «'+nm+'»? (queda en el historial de Git)','c'))await busy('Eliminando…',()=>del(f));
+  }catch(x){stat('#sC','Error: '+x.message,'er')}};
+$('#g_s').onclick=()=>{const g=i=>$('#g_'+i).value.trim();localStorage.setItem('gh',JSON.stringify({o:g('o'),r:g('r'),br:g('br')||'main',b:g('b')||'editables',t:g('t')}));$('#cfg').open=false;sel='';load()};
+(()=>{const c=CF();['o','r','br','b','t'].forEach(k=>{if(c[k])$('#g_'+k).value=c[k]})})();
+load();
+</script></body></html>
