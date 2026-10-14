@@ -248,17 +248,19 @@ function ask(t,mode,def=''){return new Promise(r=>{const D=$('#dlg'),i=$('#di'),
   const end=v=>{r(v);D.close()};D.onclose=()=>r(null);
   $('#ok').onclick=()=>end(mode==='t'?(i.value.trim()||null):mode==='s'?s.value:true);$('#no').onclick=()=>end(null);D.showModal()})}
 const okName=n=>n&&!/[\/\\]/.test(n)&&!n.startsWith('.')?n:(stat('#sC','Nombre no válido (sin «/» ni punto inicial).','er'),null);
-async function load(){
+async function load(retry){let RJ=null;
   const c=CF();BASE=(c.b||'editables').replace(/^\/+|\/+$/g,'');
   if(!c.o||!c.r){meter(null);stat('#sC','Indica tu usuario y repositorio en «Conexión con GitHub» (o déjalos fijos en el código, en GH_DEFAULT).','er');$('#cfg').open=true;F=[];return draw()}
   stat('#sC','Leyendo repositorio…');
   try{const tr=await(await gh('/git/trees/'+encodeURIComponent(BR())+'?recursive=1')).json();
     const all=tr.tree.filter(e=>e.type==='blob').reduce((a,e)=>a+(e.size||0),0);let ks=0;
-    try{ks=((await(await gh('')).json()).size||0)*1024}catch(e){}
+    try{RJ=await(await gh('')).json();ks=(RJ.size||0)*1024}catch(e){}
     meter(Math.max(all,ks));
     F=tr.tree.filter(e=>e.type==='blob'&&e.path.startsWith(BASE+'/')).map(e=>({p:e.path,s:e.size,sha:e.sha}));
-    if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (${BR()}) · ${F.filter(vis).length} archivo(s).`,'ok')}
-  catch(e){F=[];sel=BASE;if(!/40[49]/.test(e.message))meter(null);else meter(0);stat('#sC',/40[49]/.test(e.message)?'El repositorio está vacío, o la rama/permisos no son correctos ('+e.message+'). Sube un archivo para empezar.':'Error: '+e.message,'er')}
+    if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (rama ${BR()}) · ${F.filter(vis).length} archivo(s) · escritura según GitHub: ${RJ&&RJ.permissions?(RJ.permissions.push?'permitida ✓':'sin permiso ✗'):'sin comprobar'}${c.t?'':' · sin token (solo lectura)'}`,'ok')}
+  catch(e){F=[];sel=BASE;
+    if(/40[49]/.test(e.message)){const d=await diag();if(d.fixed&&!retry)return load(true);meter(d.empty?0:null);stat('#sC',d.msg||('Error: '+e.message),'er')}
+    else{meter(null);stat('#sC','Error: '+e.message,'er')}}
   draw()}
 function draw(){
   if(!sel)sel=BASE;
@@ -267,8 +269,14 @@ function draw(){
   const fs=F.filter(f=>vis(f)&&dirOf(f.p)===sel).sort((x,y)=>x.p.localeCompare(y.p));
   $('#files').innerHTML=fs.length?fs.map(f=>`<div class="row"><div><b>${esc(f.p.split('/').pop())}</b><br><span class="st">${(f.s/1048576).toFixed(2)} MB</span><br>
    <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar</button>${/\.html?$/i.test(f.p)?`<button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button>`:/\.(txt|md)$/i.test(f.p)?`<button class="btn" data-a="cp" data-k="${esc(f.p)}">Copiar texto</button>`:''}<button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
-const hint=m=>/401/.test(m)?' → El token es inválido o expiró.':/403|404/.test(m)?' → Revisa que usuario y repositorio estén bien escritos y que el token tenga permiso «Contents: Read and write» sobre este repositorio.':/409|422/.test(m)?' → Revisa que la rama exista (por defecto «main») e inténtalo de nuevo.':'';
-const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){const t='Error: '+e.message+hint(e.message);await load().catch(()=>{});stat('#sC',t,'er')}};
+const hint=m=>/401/.test(m)?' → El token es inválido o expiró.':/403|404/.test(m)?' → GitHub responde que no hay acceso. Si usuario y repositorio están bien, el token no tiene permiso: en GitHub abre tu token › Repository access › elige ESTE repositorio, y Permissions › Contents: Read and write.':/409|422/.test(m)?' → Revisa que la rama exista (por defecto «main») e inténtalo de nuevo.':'';
+async function diag(){const c=CF();let j;
+  try{j=await(await gh('')).json()}catch(e){return{msg:`No encuentro el repositorio «${c.o}/${c.r}» (${e.message}). Revisa que usuario y nombre del repositorio estén bien escritos (sin espacios ni «https://»).`}}
+  if(j.default_branch&&j.default_branch!==BR()){let u={};try{u=JSON.parse(localStorage.getItem('gh')||'{}')}catch(x){}u.br=j.default_branch;localStorage.setItem('gh',JSON.stringify(u));const i=$('#g_br');if(i)i.value=j.default_branch;return{fixed:true}}
+  return{empty:true,write:j.permissions?!!j.permissions.push:undefined,msg:`El repositorio «${c.o}/${c.r}» existe, pero la rama «${BR()}» no tiene contenido todavía. Sube un archivo para empezar.`}}
+async function whint(m){if(!/40[134]|422/.test(m))return hint(m);const d=await diag();
+  return d.fixed?' → La rama estaba mal; la corregí a «'+BR()+'». Vuelve a pulsar Guardar.':d.write===false?' → Tu token no tiene permiso de escritura en este repositorio: en GitHub abre el token › Repository access › elige este repositorio, y Permissions › Contents: Read and write.':d.msg&&!d.empty?' → '+d.msg:hint(m)}
+const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){const t='Error: '+e.message+await whint(e.message);await load().catch(()=>{});stat('#sC',t,'er')}};
 async function saveToLib(name,html){
   const sz=new Blob([html]).size;
   if(sz>100*1048576)return alert('«'+name+'» pesa '+fm(sz)+' y GitHub no admite archivos de más de 100 MB. Activa la optimización de imágenes o separa las mesas en varios archivos.');
@@ -305,7 +313,11 @@ $('#c').onclick=async e=>{
   else if(act==='rn'){const n=okName(await ask('Nuevo nombre','t',nm));if(n&&n!==nm)await busy('Renombrando…',()=>mv(f,dirOf(f.p)+'/'+n))}
   else if(act==='rm'&&await ask('¿Eliminar «'+nm+'»? (queda en el historial de Git)','c'))await busy('Eliminando…',()=>del(f));
   }catch(x){stat('#sC','Error: '+x.message,'er')}};
-$('#g_s').onclick=()=>{const g=i=>$('#g_'+i).value.trim();localStorage.setItem('gh',JSON.stringify({o:g('o'),r:g('r'),br:g('br')||'main',b:g('b')||'editables',t:g('t')}));$('#cfg').open=false;sel='';load()};
+$('#g_s').onclick=()=>{const g=i=>$('#g_'+i).value.trim();let o=g('o').replace(/^https?:\/\/(www\.)?github\.com\//i,''),r=g('r');
+  if(o.includes('/')){const p=o.split('/').filter(Boolean);o=p[0];if(!r)r=p[1]||''}
+  r=r.replace(/^https?:\/\/(www\.)?github\.com\/[^/]+\//i,'').replace(/\.git$/,'').split('/').filter(Boolean).pop()||'';
+  $('#g_o').value=o;$('#g_r').value=r;
+  localStorage.setItem('gh',JSON.stringify({o,r,br:g('br')||'main',b:g('b')||'editables',t:g('t')}));$('#cfg').open=false;sel='';load()};
 /* ---------- Importar ZIP ---------- */
 const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',svg:'image/svg+xml',woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf'};
 const zres=(dir,rp,has)=>{if(/^(https?:|data:|\/\/|#|blob:|mailto:)/i.test(rp.trim()))return null;let p;try{p=decodeURIComponent(rp.split(/[?#]/)[0])}catch(e){return null}
@@ -374,7 +386,7 @@ function zcard(file,A){const el=document.createElement('div');el.className='row'
       sel=q('.ds').value+'/'+pj;await load();
       el.innerHTML=`<b>✓ ${ok} de ${ch.length} archivo(s) guardados en «${esc(pathOf(sel))}»</b>${skipped.length?'<div class="st er">No se subieron: '+esc(skipped.join(', '))+'</div>':''}`;
       stat('#sC',`Guardado en «${pathOf(sel)}».`,'ok');draw()
-    }catch(e){cs((ok?`Se guardaron ${ok} archivo(s) antes del error. `:'')+'Error: '+e.message+hint(e.message),'er');bt.disabled=false;load().catch(()=>{})}};
+    }catch(e){cs((ok?`Se guardaron ${ok} archivo(s) antes del error. `:'')+'Error: '+e.message+await whint(e.message),'er');bt.disabled=false;load().catch(()=>{})}};
   return el}
 async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar el lector de ZIP (revisa tu conexión).','er');
   for(const f of files){try{stat('#sC','Analizando '+f.name+'…');$('#zres').appendChild(zcard(f,await zanalyze(f)));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
