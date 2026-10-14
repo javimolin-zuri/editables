@@ -267,7 +267,8 @@ function draw(){
   const fs=F.filter(f=>vis(f)&&dirOf(f.p)===sel).sort((x,y)=>x.p.localeCompare(y.p));
   $('#files').innerHTML=fs.length?fs.map(f=>`<div class="row"><div><b>${esc(f.p.split('/').pop())}</b><br><span class="st">${(f.s/1048576).toFixed(2)} MB</span><br>
    <button class="btn" data-a="dl" data-k="${esc(f.p)}">Descargar</button>${/\.html?$/i.test(f.p)?`<button class="btn" data-a="ai" data-k="${esc(f.p)}">→ SVG para Illustrator</button>`:/\.(txt|md)$/i.test(f.p)?`<button class="btn" data-a="cp" data-k="${esc(f.p)}">Copiar texto</button>`:''}<button class="btn g" data-a="mv" data-k="${esc(f.p)}">Mover</button><button class="btn g" data-a="rn" data-k="${esc(f.p)}">Renombrar</button><button class="btn g" data-a="rm" data-k="${esc(f.p)}">Eliminar</button></div></div>`).join(''):'<p class="st">Esta carpeta no tiene archivos.</p>'}
-const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){stat('#sC','Error: '+e.message,'er');await load().catch(()=>{})}};
+const hint=m=>/401/.test(m)?' → El token es inválido o expiró.':/403|404/.test(m)?' → Revisa que usuario y repositorio estén bien escritos y que el token tenga permiso «Contents: Read and write» sobre este repositorio.':/409|422/.test(m)?' → Revisa que la rama exista (por defecto «main») e inténtalo de nuevo.':'';
+const busy=async(m,fn)=>{try{stat('#sC',m);await fn();await load()}catch(e){const t='Error: '+e.message+hint(e.message);await load().catch(()=>{});stat('#sC',t,'er')}};
 async function saveToLib(name,html){
   const sz=new Blob([html]).size;
   if(sz>100*1048576)return alert('«'+name+'» pesa '+fm(sz)+' y GitHub no admite archivos de más de 100 MB. Activa la optimización de imágenes o separa las mesas en varios archivos.');
@@ -356,16 +357,24 @@ function zcard(file,A){const el=document.createElement('div');el.className='row'
     const on=T.filter(t=>t.on);if(new Set(on.map(t=>t.path)).size<on.length)err='Dos archivos quedarían con la misma ruta.';return{T,err}};
   const pv=()=>{const{T,err}=tgt();q('pre').textContent=(err?'⚠ '+err+'\n':'')+T.filter(t=>t.on).map(t=>t.rel).sort().join('\n')};
   el.addEventListener('input',pv);el.addEventListener('change',pv);pv();
+  const zs=document.createElement('div');zs.className='st zs';el.appendChild(zs);
+  const cs=(t,c='')=>{zs.textContent=t;zs.className='st zs '+c;zs.scrollIntoView({block:'nearest'})};
   const bt=document.createElement('button');bt.className='btn';bt.textContent='Guardar selección en el repositorio';el.appendChild(bt);
-  bt.onclick=async()=>{const{T,err}=tgt();if(err)return stat('#sC',err,'er');const ch=T.filter(t=>t.on);if(!ch.length)return stat('#sC','No hay archivos seleccionados.','er');
+  bt.onclick=async()=>{const{T,err}=tgt();if(err)return cs(err,'er');const ch=T.filter(t=>t.on);if(!ch.length)return cs('No hay archivos seleccionados.','er');
+    const c=CF();if(!c.o||!c.r){$('#cfg').open=true;return cs('Falta indicar usuario y repositorio en «⚙ Conexión con GitHub».','er')}
+    if(!c.t){$('#cfg').open=true;return cs('Falta el token: GitHub lo exige para guardar archivos. Pégalo en «⚙ Conexión con GitHub» y pulsa «Guardar y conectar».','er')}
     const pj=q('.pn').value.trim(),ex=ch.filter(t=>F.some(f=>f.p===t.path));
     if(ex.length&&!await ask(`${ex.length} archivo(s) ya existen y se reemplazarán. ¿Continuar?`,'c'))return;
-    await busy('',async()=>{let i=0;for(const t of ch){const it=t.it;stat('#sC',`Preparando y subiendo ${++i} de ${ch.length}: ${t.rel}`);
-      const x=await A.zip.file(it.path).async('string'),h=it.kind==='html'?await zinline(x,it.dir,A.zip):x,b=new Blob([h],{type:it.kind==='html'?'text/html':'text/plain'});
-      if(b.size>100*1048576){stat('#sC',t.rel+' pesa '+fm(b.size)+' (límite de GitHub: 100 MB); se omitió.','er');continue}
-      if(USED+b.size>LIM&&!await ask('Subir «'+t.rel+'» superaría el 1 GB recomendado. ¿Continuar?','c'))continue;
-      await put(t.path,b,'Importar '+pj+': '+t.rel);USED+=b.size}
-      sel=q('.ds').value+'/'+pj;el.remove()})};
+    bt.disabled=true;let ok=0,skipped=[];
+    try{let i=0;for(const t of ch){const it=t.it;cs(`Preparando y subiendo ${++i} de ${ch.length}: ${t.rel}`);
+        const x=await A.zip.file(it.path).async('string'),h=it.kind==='html'?await zinline(x,it.dir,A.zip):x,b=new Blob([h],{type:it.kind==='html'?'text/html':'text/plain'});
+        if(b.size>100*1048576){skipped.push(t.rel+' ('+fm(b.size)+', máx. 100 MB)');continue}
+        if(USED+b.size>LIM&&!await ask('Subir «'+t.rel+'» superaría el 1 GB recomendado. ¿Continuar?','c')){skipped.push(t.rel+' (omitido por espacio)');continue}
+        await put(t.path,b,'Importar '+pj+': '+t.rel);USED+=b.size;ok++}
+      sel=q('.ds').value+'/'+pj;await load();
+      el.innerHTML=`<b>✓ ${ok} de ${ch.length} archivo(s) guardados en «${esc(pathOf(sel))}»</b>${skipped.length?'<div class="st er">No se subieron: '+esc(skipped.join(', '))+'</div>':''}`;
+      stat('#sC',`Guardado en «${pathOf(sel)}».`,'ok');draw()
+    }catch(e){cs((ok?`Se guardaron ${ok} archivo(s) antes del error. `:'')+'Error: '+e.message+hint(e.message),'er');bt.disabled=false;load().catch(()=>{})}};
   return el}
 async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar el lector de ZIP (revisa tu conexión).','er');
   for(const f of files){try{stat('#sC','Analizando '+f.name+'…');$('#zres').appendChild(zcard(f,await zanalyze(f)));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
