@@ -331,7 +331,7 @@ async function zanalyze(file){
     if(/^html?$/.test(ext)){const t=await e.async('string'),refs=zcollect(t,dir,has);let est=t.length;
       for(const r of refs){used.add(r);if(sz[r]==null)sz[r]=(await zip.file(r).async('uint8array')).length;est+=sz[r]*1.37}
       items.push({path:e.name,dir,kind:'html',secs:Math.max(1,(t.match(/<section\b/gi)||[]).length),est,refs,title:((t.match(/<title>([^<]*)/i)||[])[1]||'').trim(),gf:/fonts\.googleapis\.com/.test(t)})}
-    else if(/^(txt|md)$/.test(ext))items.push({path:e.name,dir,kind:'txt',secs:0,est:(await e.async('uint8array')).length,refs:[]});
+    else if(/^(txt|md)$/.test(ext)){const tx=await e.async('string');items.push({path:e.name,dir,kind:'txt',secs:0,est:new Blob([tx]).size,refs:[],txt:tx.slice(0,3000)})}
     else if(MIME[ext])imgs++;else oth++}
   items.forEach(it=>{it.out=it.path.split('/').pop()});
   items.forEach(it=>{if(items.filter(x=>x.out===it.out).length>1)it.out=it.path.replace(/\//g,'_')});
@@ -346,13 +346,39 @@ async function zanalyze(file){
       if(comb){comb.grp=G.length;comb.role='completo'}
       G.push({name:comb?zclean(comb.stem):pre,members:mem.concat(comb?[comb]:[])})}}
   return{zip,items,groups:G,skip:Math.max(0,imgs-[...used].filter(u=>MIME[u.split('.').pop().toLowerCase()]).length),oth}}
+const nrm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const slug=s=>nrm(s).replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join('_');
+const TYPES=[[/carrusel|carousel/,'CARRUSEL'],[/historia|stor(y|ies)/,'HISTORIAS'],[/reel/,'REEL'],[/\bpost\b/,'POST'],[/flyer/,'FLYER'],[/banner/,'BANNER'],[/presentaci|deck/,'PRESENTACION']];
+const JUNK=/^(carrusel|carousel|editable|html|completo|final|slide|slides|lamina|laminas|export|exportar|copia|historia|reel|post|flyer|banner|v\d+)$/,STOP=/^(que|de|la|el|los|las|y|en|un|una|para|con|por|del|al|se|su|tu|lo)$/;
+let LASTB='';
+function zsuggest(file,A){
+  const top=kids(BASE).map(p=>p.split('/').pop()),zs=file.name.replace(/\.zip$/i,''),loose=A.items.filter(i=>i.kind==='html'&&i.grp==null),
+    titles=loose.map(i=>i.title).filter(Boolean),allT=A.items.map(i=>i.title).filter(Boolean),txts=A.items.filter(i=>i.txt).map(i=>i.txt),
+    hay=nrm([zs,...allT,...txts].join(' ')),split=t=>t.split(/\s[—–|-]\s/);
+  let brand=top.find(k=>hay.includes(nrm(k)));
+  if(!brand)for(const t of allT){const p=split(t);if(p.length>1){brand=p[p.length-1].trim().toUpperCase();break}}
+  if(!brand)for(const t of allT){const w=nrm(t).split(/[^a-z0-9]+/).filter(x=>x&&!JUNK.test(x)&&!/^\d+$/.test(x));if(split(t).length===1&&w.length===1){brand=t.trim().split(/\s+/).pop().toUpperCase();break}}
+  if(!brand&&top.length===1)brand=top[0];
+  if(!brand&&LASTB)brand=LASTB;if(brand)LASTB=brand;
+  const src=nrm([zs,...allT,...A.items.map(i=>i.stem)].join(' ')),type=(TYPES.find(([r])=>r.test(src))||[])[1]||(A.groups.length?'CARRUSEL':''),
+    bw=brand?nrm(brand).split(/[^a-z0-9]+/):[],strip=t=>nrm(t).replace(/[^a-z0-9]+/g,' ').split(' ').filter(w=>w&&!JUNK.test(w)&&!bw.includes(w)&&!/^\d+$/.test(w)).join(' ');
+  let proj='';for(const t of titles){const c=strip(split(t)[0]);if(c){proj=c;break}}
+  if(!proj)proj=strip(zs);
+  if(!proj){const l=(txts[0]||'').split('\n').find(x=>x.trim())||'';proj=nrm(l).replace(/[^a-z0-9]+/g,' ').split(' ').filter(w=>w.length>2&&!STOP.test(w)).slice(0,4).join(' ')}
+  const P=slug(proj)||slug(zs)||'Proyecto';
+  A.items.forEach(it=>{
+    if(it.kind==='html'){if(it.grp!=null)it.stem=it.role==='completo'?P+'_completo':P+'_'+String(it.n).padStart(2,'0');
+      else it.stem=loose.length===1?P:(slug(strip(it.stem))||P)}
+    else if(/leeme|readme|instruc/i.test(it.stem))it.off=true});
+  let cur=BASE;const out=[];for(const seg of [brand,type,P].filter(Boolean)){const hit=kids(cur).find(d=>nrm(d.split('/').pop())===nrm(seg)),nm=hit?hit.split('/').pop():seg;out.push(nm);cur+='/'+nm}
+  A.sug={path:out.join('/')}}
 function zcard(file,A){const el=document.createElement('div');el.className='row';el.style.display='block';
-  const info=it=>`${it.role==='completo'?'versión completa · '+it.secs+' láminas juntas':it.kind==='txt'?'texto':it.grp!=null?'lámina '+it.n:it.secs>1?it.secs+' láminas juntas':'1 lámina'} · ${fm(it.est)}${it.refs.length?' · incrusta '+it.refs.length+' imagen(es)':''}${it.gf?' · usa Google Fonts (necesita internet)':''}${it.dup?' · <b>ya incluida en la versión completa</b> (desmarcada)':''}`;
-  const row=(it,i,loose)=>`<div style="margin:10px 0"><input type="checkbox" data-i="${i}"${it.dup?'':' checked'}> <input class="fi nm" data-i="${i}" value="${esc(it.stem)}" style="width:min(300px,62%);display:inline-block;margin:0"><b>${esc(it.ext)}</b><br><span class="st">${info(it)}</span>${it.title?'<br><span class="st">«'+esc(it.title)+'»</span>':''}${loose?'<br><input class="fi lf" data-i="'+i+'" placeholder="subcarpeta opcional (ej: Descripciones)" style="max-width:360px">':''}</div>`;
+  const info=it=>`${it.role==='completo'?'versión completa · '+it.secs+' láminas juntas':it.kind==='txt'?'texto':it.grp!=null?'lámina '+it.n:it.secs>1?it.secs+' láminas juntas':'1 lámina'} · ${fm(it.est)}${it.refs.length?' · incrusta '+it.refs.length+' imagen(es)':''}${it.gf?' · usa Google Fonts (necesita internet)':''}${it.dup?' · <b>ya incluida en la versión completa</b> (desmarcada)':''}${it.off?' · parece una guía de la exportación (desmarcado)':''}`;
+  const row=(it,i,loose)=>`<div style="margin:10px 0"><input type="checkbox" data-i="${i}"${it.dup||it.off?'':' checked'}> <input class="fi nm" data-i="${i}" value="${esc(it.stem)}" style="width:min(300px,62%);display:inline-block;margin:0"><b>${esc(it.ext)}</b><br><span class="st">${info(it)}</span>${it.title?'<br><span class="st">«'+esc(it.title)+'»</span>':''}${loose?'<br><input class="fi lf" data-i="'+i+'" placeholder="subcarpeta opcional (ej: Descripciones)" style="max-width:360px">':''}</div>`;
   const gHtml=A.groups.map((g,gi)=>`<div style="border-left:3px solid var(--ac);padding-left:12px;margin:14px 0"><b>🎞 Carrusel detectado</b> <span class="st">· ${g.members.filter(m=>m.role!=='completo').length} láminas${g.members.some(m=>m.role==='completo')?' + versión completa':''}</span><br><span class="st">Subcarpeta del carrusel (vacío = directo en el proyecto):</span><input class="fi gf" data-g="${gi}" value="${A.groups.length>1?esc(g.name):''}">${[...g.members].sort((a,b)=>(b.role==='completo')-(a.role==='completo')).map(m=>row(m,A.items.indexOf(m),false)).join('')}</div>`).join('');
   const loose=A.items.map((it,i)=>[it,i]).filter(([it])=>it.grp==null);
   el.innerHTML=`<b>📦 ${esc(file.name)}</b>
-  <div style="margin-top:8px"><span class="st">Guardar dentro de:</span><select class="fi ds">${flat().map(([k])=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(pathOf(k))}</option>`).join('')}</select><span class="st">Proyecto / carpeta (puedes escribir una ruta, ej: NEORIGEN/CARRUSEL; las carpetas que no existan se crean solas):</span><input class="fi pn" value="${esc(file.name.replace(/\.zip$/i,'').trim())}"></div>
+  <div style="margin-top:8px"><span class="st">Guardar dentro de:</span><select class="fi ds">${flat().map(([k])=>`<option value="${esc(k)}"${k===sel?' selected':''}>${esc(pathOf(k))}</option>`).join('')}</select><span class="st">✨ Carpeta sugerida automáticamente (puedes editarla; las carpetas que no existan se crean solas):</span><input class="fi pn" value="${esc(A.sug.path)}"></div>
   ${gHtml}${loose.length?'<div style="margin:14px 0"><b>Otros archivos</b>'+loose.map(([it,i])=>row(it,i,true)).join('')+'</div>':''}
   <details><summary class="st" style="cursor:pointer">Vista previa de la estructura</summary><pre class="st" style="white-space:pre-wrap;margin:6px 0"></pre></details>
   <div class="st">Se omiten ${A.skip} imagen(es) exportada(s) sin uso en los HTML${A.oth?' y '+A.oth+' archivo(s) de otro tipo':''}.</div>`;
@@ -385,7 +411,7 @@ function zcard(file,A){const el=document.createElement('div');el.className='row'
     }catch(e){cs((ok?`Se guardaron ${ok} archivo(s) antes del error. `:'')+'Error: '+e.message+await whint(e.message),'er');bt.disabled=false;load().catch(()=>{})}};
   return el}
 async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar el lector de ZIP (revisa tu conexión).','er');
-  for(const f of files){try{stat('#sC','Analizando '+f.name+'…');$('#zres').appendChild(zcard(f,await zanalyze(f)));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
+  for(const f of files){try{stat('#sC','Analizando '+f.name+'…');const A=await zanalyze(f);zsuggest(f,A);$('#zres').appendChild(zcard(f,A));stat('#sC','Revisa la selección y pulsa «Guardar».','ok')}catch(e){stat('#sC','No se pudo leer '+f.name+': '+e.message,'er')}}}
 (()=>{const z=$('#dZ'),i=z.querySelector('input');i.onchange=()=>{zadd([...i.files]);i.value=''};
   z.ondragover=e=>{e.preventDefault();z.classList.add('hv')};z.ondragleave=()=>z.classList.remove('hv');
   z.ondrop=e=>{e.preventDefault();z.classList.remove('hv');zadd([...e.dataTransfer.files].filter(f=>/\.zip$/i.test(f.name)))}})();
