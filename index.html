@@ -57,10 +57,10 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
  </ul>
 </section>
 <section class="card hide" id="c">
- <details id="cfg" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">⚙ Conexión con GitHub</summary>
-  <p class="st">Para <b>ver y descargar</b> tus archivos solo necesitas usuario y repositorio (es público): sin token. El token solo se pide para <b>guardar, mover o borrar</b>; se guarda en este navegador. Puedes dejar usuario/repositorio fijos en el código (<code>GH_DEFAULT</code>). No pegues el token en el código de un repositorio público: GitHub lo detecta y lo revoca automáticamente, y cualquiera podría usarlo para modificar tu repositorio.</p>
-  <input class="fi" id="g_o" placeholder="Usuario u organización (owner)"><input class="fi" id="g_r" placeholder="Nombre del repositorio"><input class="fi" id="g_br" placeholder="Rama (main)"><input class="fi" id="g_b" placeholder="Carpeta base (editables)"><input class="fi" id="g_t" type="password" placeholder="Token (opcional: solo para guardar o borrar)">
-  <button class="btn" id="g_s">Guardar y conectar</button></details>
+ <details id="cfg" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">🔑 Token de GitHub</summary>
+  <p class="st">Para <b>ver y descargar</b> tus archivos no necesitas nada. El token solo se usa para <b>guardar, mover o borrar</b>, y queda guardado únicamente en este navegador. Tu repositorio es <b>javimolin-zuri/editables</b> (ya está fijado en el código).</p>
+  <input class="fi" id="g_t" type="password" placeholder="Pega aquí tu token de acceso">
+  <button class="btn" id="g_s">Guardar token</button></details>
  <p class="st" id="sC">Cargando…</p>
  <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir archivos aquí (HTML o TXT)<input type="file" id="up" accept=".html,.htm,.txt,.md" multiple class="hide"></label></div>
  <details id="imp" open style="margin:0 0 14px"><summary style="cursor:pointer;font-weight:600">📦 Importar proyecto desde ZIP</summary>
@@ -225,13 +225,13 @@ function meter(b){const bar=$('#mBar'),tx=$('#mTx'),nt=$('#mNote');
   tx.textContent=`${fm(b)} usados de 1 GB · quedan ${fm(Math.max(LIM-b,0))} (${Math.max(100-p,0).toFixed(1)}% libre)`;
   nt.textContent=p>=100?'⚠ Superaste el 1 GB recomendado por GitHub. Respalda tus archivos y crea otro repositorio para lo nuevo.':p>=90?'⚠ Queda menos del 10%. Ve preparando un segundo repositorio y haz un respaldo.':p>=70?'Atención: sobre el 70% del espacio recomendado. Planifica un repositorio adicional.':'GitHub recomienda repositorios bajo 1 GB (hasta 5 GB como máximo sugerido) y archivos bajo 100 MB. Borrar archivos no libera espacio: el historial de Git los conserva.'}
 /* Valores por defecto: rellena owner y repo aquí para no escribirlos nunca más. El token es OPCIONAL (solo se necesita para guardar/borrar). */
-const GH_DEFAULT={o:'',r:'',br:'main',b:'editables',t:''};
-const CF=()=>{let u={};try{u=JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){}Object.keys(u).forEach(k=>{if(!u[k])delete u[k]});return{...GH_DEFAULT,...u}};
+const GH_DEFAULT={o:'javimolin-zuri',r:'editables',br:'main',b:'editables',t:''};
+const CF=()=>{let u={};try{u=JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){}return{...GH_DEFAULT,br:u.br||GH_DEFAULT.br,t:(u.t||'').trim()}};
 const BR=()=>CF().br||'main',enc=p=>p.split('/').map(encodeURIComponent).join('/');
 async function gh(p,o={}){const c=CF(),r=await fetch(`https://api.github.com/repos/${c.o}/${c.r}${p}`,{...o,headers:{...(c.t?{Authorization:'Bearer '+c.t}:{}),Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(o.headers||{})}});
   if(!r.ok){let m=r.status;try{m+=' '+(await r.json()).message}catch(e){}throw new Error(m)}return r}
 const toB64=b=>new Promise(r=>{const f=new FileReader;f.onload=()=>r(f.result.split(',')[1]);f.readAsDataURL(b)});
-const needTok=()=>{if(!CF().t)throw new Error('Para guardar o borrar necesitas el token (⚙ Conexión con GitHub). Para ver y descargar no hace falta.')};
+const needTok=()=>{if(!CF().t)throw new Error('Para guardar o borrar necesitas el token (🔑 Token de GitHub). Para ver y descargar no hace falta.')};
 async function put(path,blob,msg){needTok();const ex=F.find(f=>f.p===path),body={message:msg||'Agregar '+path,content:await toB64(blob),branch:BR()};if(ex)body.sha=ex.sha;
   await gh('/contents/'+enc(path),{method:'PUT',body:JSON.stringify(body)})}
 const del=f=>(needTok(),gh)('/contents/'+enc(f.p),{method:'DELETE',body:JSON.stringify({message:'Eliminar '+f.p,sha:f.sha,branch:BR()})});
@@ -250,7 +250,7 @@ function ask(t,mode,def=''){return new Promise(r=>{const D=$('#dlg'),i=$('#di'),
 const okName=n=>n&&!/[\/\\]/.test(n)&&!n.startsWith('.')?n:(stat('#sC','Nombre no válido (sin «/» ni punto inicial).','er'),null);
 async function load(retry){let RJ=null;
   const c=CF();BASE=(c.b||'editables').replace(/^\/+|\/+$/g,'');
-  if(!c.o||!c.r){meter(null);stat('#sC','Indica tu usuario y repositorio en «Conexión con GitHub» (o déjalos fijos en el código, en GH_DEFAULT).','er');$('#cfg').open=true;F=[];return draw()}
+  if(!c.o||!c.r){meter(null);stat('#sC','Falta configurar el repositorio en el código (GH_DEFAULT).','er');$('#cfg').open=true;F=[];return draw()}
   stat('#sC','Leyendo repositorio…');
   try{const tr=await(await gh('/git/trees/'+encodeURIComponent(BR())+'?recursive=1')).json();
     const all=tr.tree.filter(e=>e.type==='blob').reduce((a,e)=>a+(e.size||0),0);let ks=0;
@@ -313,11 +313,7 @@ $('#c').onclick=async e=>{
   else if(act==='rn'){const n=okName(await ask('Nuevo nombre','t',nm));if(n&&n!==nm)await busy('Renombrando…',()=>mv(f,dirOf(f.p)+'/'+n))}
   else if(act==='rm'&&await ask('¿Eliminar «'+nm+'»? (queda en el historial de Git)','c'))await busy('Eliminando…',()=>del(f));
   }catch(x){stat('#sC','Error: '+x.message,'er')}};
-$('#g_s').onclick=()=>{const g=i=>$('#g_'+i).value.trim();let o=g('o').replace(/^https?:\/\/(www\.)?github\.com\//i,''),r=g('r');
-  if(o.includes('/')){const p=o.split('/').filter(Boolean);o=p[0];if(!r)r=p[1]||''}
-  r=r.replace(/^https?:\/\/(www\.)?github\.com\/[^/]+\//i,'').replace(/\.git$/,'').split('/').filter(Boolean).pop()||'';
-  $('#g_o').value=o;$('#g_r').value=r;
-  localStorage.setItem('gh',JSON.stringify({o,r,br:g('br')||'main',b:g('b')||'editables',t:g('t')}));$('#cfg').open=false;sel='';load()};
+$('#g_s').onclick=()=>{let u={};try{u=JSON.parse(localStorage.getItem('gh')||'{}')}catch(e){}u.t=$('#g_t').value.trim();localStorage.setItem('gh',JSON.stringify(u));$('#cfg').open=false;load()};
 /* ---------- Importar ZIP ---------- */
 const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',svg:'image/svg+xml',woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf'};
 const zres=(dir,rp,has)=>{if(/^(https?:|data:|\/\/|#|blob:|mailto:)/i.test(rp.trim()))return null;let p;try{p=decodeURIComponent(rp.split(/[?#]/)[0])}catch(e){return null}
@@ -373,8 +369,8 @@ function zcard(file,A){const el=document.createElement('div');el.className='row'
   const cs=(t,c='')=>{zs.textContent=t;zs.className='st zs '+c;zs.scrollIntoView({block:'nearest'})};
   const bt=document.createElement('button');bt.className='btn';bt.textContent='Guardar selección en el repositorio';el.appendChild(bt);
   bt.onclick=async()=>{const{T,err,pj}=tgt();if(err)return cs(err,'er');const ch=T.filter(t=>t.on);if(!ch.length)return cs('No hay archivos seleccionados.','er');
-    const c=CF();if(!c.o||!c.r){$('#cfg').open=true;return cs('Falta indicar usuario y repositorio en «⚙ Conexión con GitHub».','er')}
-    if(!c.t){$('#cfg').open=true;return cs('Falta el token: GitHub lo exige para guardar archivos. Pégalo en «⚙ Conexión con GitHub» y pulsa «Guardar y conectar».','er')}
+    const c=CF();if(!c.o||!c.r){$('#cfg').open=true;return cs('Falta configurar el repositorio en el código.','er')}
+    if(!c.t){$('#cfg').open=true;return cs('Falta el token: GitHub lo exige para guardar archivos. Pégalo en «🔑 Token de GitHub» y pulsa «Guardar token».','er')}
     const ex=ch.filter(t=>F.some(f=>f.p===t.path));
     if(ex.length&&!await ask(`${ex.length} archivo(s) ya existen y se reemplazarán. ¿Continuar?`,'c'))return;
     bt.disabled=true;let ok=0,skipped=[];
@@ -393,6 +389,6 @@ async function zadd(files){if(!window.JSZip)return stat('#sC','No se pudo cargar
 (()=>{const z=$('#dZ'),i=z.querySelector('input');i.onchange=()=>{zadd([...i.files]);i.value=''};
   z.ondragover=e=>{e.preventDefault();z.classList.add('hv')};z.ondragleave=()=>z.classList.remove('hv');
   z.ondrop=e=>{e.preventDefault();z.classList.remove('hv');zadd([...e.dataTransfer.files].filter(f=>/\.zip$/i.test(f.name)))}})();
-(()=>{const c=CF();['o','r','br','b','t'].forEach(k=>{if(c[k])$('#g_'+k).value=c[k]})})();
+(()=>{const c=CF();if(c.t)$('#g_t').value=c.t})();
 load();
 </script></body></html>
