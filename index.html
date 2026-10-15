@@ -62,6 +62,7 @@ dialog{border:1px solid var(--ln);border-radius:14px;background:var(--card);colo
   <input class="fi" id="g_t" type="password" placeholder="Pega aquí tu token de acceso">
   <button class="btn" id="g_s">Guardar token</button></details>
  <p class="st" id="sC">Cargando…</p>
+ <div class="row" id="stray" style="display:none"></div>
  <div style="margin:8px 0 12px"><button class="btn g" id="nf">+ Carpeta aquí</button><button class="btn g" id="rf">Renombrar carpeta</button><button class="btn g" id="df">Eliminar carpeta</button><button class="btn g" id="rl">↻ Actualizar</button><label class="btn" style="display:inline-block">Subir archivos aquí (HTML o TXT)<input type="file" id="up" accept=".html,.htm,.txt,.md" multiple class="hide"></label></div>
  <details id="imp" open style="margin:0 0 14px"><summary style="cursor:pointer;font-weight:600">📦 Importar proyecto desde ZIP</summary>
   <label class="drop" id="dZ" style="margin-top:10px;padding:22px"><input type="file" accept=".zip" multiple><b>Arrastra uno o varios .zip</b><br>detecta el proyecto, sus HTML y láminas; no guarda los PNG exportados</label>
@@ -217,7 +218,7 @@ wire('#dB',async f=>{
 });
 
 /* ---------- Biblioteca (GitHub) ---------- */
-let F=[],sel='',BASE='editables',USED=0;
+let F=[],ALL=[],sel='',BASE='editables',USED=0;
 const LIM=1024**3,fm=x=>x>=1073741824?(x/1073741824).toFixed(2)+' GB':(x/1048576).toFixed(1)+' MB';
 function meter(b){const bar=$('#mBar'),tx=$('#mTx'),nt=$('#mNote');
   if(b==null){USED=0;bar.style.width='0';tx.textContent='Sin conexión';nt.textContent='Conecta tu repositorio para ver cuánto espacio queda.';return}
@@ -237,6 +238,8 @@ async function put(path,blob,msg){needTok();const ex=F.find(f=>f.p===path),body=
 const del=f=>(needTok(),gh)('/contents/'+enc(f.p),{method:'DELETE',body:JSON.stringify({message:'Eliminar '+f.p,sha:f.sha,branch:BR()})});
 const raw=async p=>(await gh('/contents/'+enc(p)+'?ref='+encodeURIComponent(BR()),{headers:{Accept:'application/vnd.github.raw+json'}})).text();
 const mv=async(f,np)=>{const t=f.p.endsWith('.gitkeep')?'\n':await raw(f.p);await put(np,new Blob([t]),'Mover '+f.p+' → '+np);await del(f)};
+const canon=(dest,segs)=>{let cur=dest;const o=[];for(const g of segs){const hit=kids(cur).find(d=>nrm(d.split('/').pop())===nrm(g)),nm=hit?hit.split('/').pop():g;o.push(nm);cur+='/'+nm}return o};
+const tidy=(dest,segs)=>{let a=segs.slice();while(dest===BASE&&a.length&&nrm(a[0])===nrm(BASE.split('/').pop()))a.shift();a=a.filter((x,i)=>i===0||nrm(x)!==nrm(a[i-1]));return canon(dest,a)};
 const dirs=()=>{const D=new Set([BASE]);F.forEach(f=>{const q=f.p.split('/');for(let i=1;i<q.length;i++)D.add(q.slice(0,i).join('/'))});return[...D].filter(d=>d.startsWith(BASE))};
 const kids=p=>dirs().filter(d=>d.startsWith(p+'/')&&!d.slice(p.length+1).includes('/')).sort((a,b)=>a.localeCompare(b));
 const flat=(p=BASE,d=0,o=[])=>{o.push([p,d]);kids(p).forEach(k=>flat(k,d+1,o));return o};
@@ -253,12 +256,12 @@ async function load(retry){let RJ=null;
   if(!c.o||!c.r){meter(null);stat('#sC','Falta configurar el repositorio en el código (GH_DEFAULT).','er');$('#cfg').open=true;F=[];return draw()}
   stat('#sC','Leyendo repositorio…');
   try{const tr=await(await gh('/git/trees/'+encodeURIComponent(BR())+'?recursive=1')).json();
-    const all=tr.tree.filter(e=>e.type==='blob').reduce((a,e)=>a+(e.size||0),0);let ks=0;
+    ALL=tr.tree.filter(e=>e.type==='blob').map(e=>({p:e.path,s:e.size,sha:e.sha}));const all=ALL.reduce((a,e)=>a+(e.s||0),0);let ks=0;
     try{RJ=await(await gh('')).json();ks=(RJ.size||0)*1024}catch(e){}
     meter(Math.max(all,ks));
     F=tr.tree.filter(e=>e.type==='blob'&&e.path.startsWith(BASE+'/')).map(e=>({p:e.path,s:e.size,sha:e.sha}));
-    if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (rama ${BR()}) · ${F.filter(vis).length} archivo(s) · escritura según GitHub: ${RJ&&RJ.permissions?(RJ.permissions.push?'permitida ✓':'sin permiso ✗'):'sin comprobar'}${c.t?'':' · sin token (solo lectura)'}`,'ok')}
-  catch(e){F=[];sel=BASE;
+    if(!dirs().includes(sel))sel=BASE;stat('#sC',`Conectado a ${c.o}/${c.r} (rama ${BR()}) · ${F.filter(vis).length} archivo(s) · escritura según GitHub: ${RJ&&RJ.permissions?(RJ.permissions.push?'permitida ✓':'sin permiso ✗'):'sin comprobar'}${c.t?'':' · sin token (solo lectura)'}`,'ok');strayCheck()}
+  catch(e){F=[];ALL=[];sel=BASE;strayCheck();
     if(/40[49]/.test(e.message)){const d=await diag();if(d.fixed&&!retry)return load(true);meter(d.empty?0:null);stat('#sC',d.msg||('Error: '+e.message),'er')}
     else{meter(null);stat('#sC','Error: '+e.message,'er')}}
   draw()}
@@ -289,7 +292,7 @@ function addSave(c,name,html){const b=document.createElement('button');b.classNa
 function addSaveRow(res,name,html){const r=document.createElement('div');r.className='row';r.innerHTML='<div><b>Archivo original</b><br><span class="st">Guarda tu editable en HTML en tu repositorio.</span><br></div>';addSave(r.lastChild,name,html);res.appendChild(r)}
 $('#nf').onclick=async()=>{const v=await ask('Nueva carpeta dentro de «'+pathOf(sel)+'». Para crear subcarpetas de una vez, separa con «/»: Clientes/Neorigen/Casa Ciprés','t');if(!v)return;
   const sg=v.split('/').map(x=>x.trim()).filter(Boolean);if(!sg.length||sg.some(x=>x.startsWith('.')||/\\/.test(x)))return stat('#sC','Nombre no válido (sin «\\» ni punto inicial).','er');
-  const p=sel+'/'+sg.join('/');if(dirs().includes(p))return stat('#sC','Esa carpeta ya existe.','er');
+  const tg=tidy(sel,sg);if(!tg.length)return stat('#sC','Esa ruta ya es la carpeta actual.','er');const p=sel+'/'+tg.join('/');if(dirs().includes(p))return stat('#sC','Esa carpeta ya existe.','er');
   sel=p;await busy('Creando carpeta…',()=>put(p+'/.gitkeep',new Blob(['\n']),'Crear carpeta '+p))};
 $('#rf').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no se puede renombrar.','er');
   const n=okName(await ask('Nuevo nombre de la carpeta','t',sel.split('/').pop()));if(!n)return;const np=dirOf(sel)+'/'+n,old=sel,fl=F.filter(f=>f.p.startsWith(old+'/'));
@@ -298,6 +301,22 @@ $('#df').onclick=async()=>{if(sel===BASE)return stat('#sC','La carpeta base no s
   const fl=F.filter(f=>f.p.startsWith(sel+'/'));if(!await ask(`¿Eliminar «${pathOf(sel)}» con ${fl.filter(vis).length} archivo(s)? (queda en el historial de Git)`,'c'))return;
   const par=dirOf(sel);await busy('',async()=>{let i=0;for(const f of fl){stat('#sC',`Eliminando ${++i} de ${fl.length}…`);await del(f)}sel=par})};
 $('#rl').onclick=load;
+const strays=()=>ALL.filter(e=>e.p.includes('/')&&!e.p.startsWith(BASE+'/')&&!e.p.startsWith('.'));
+function strayCheck(){const S=strays(),el=$('#stray');
+  if(!S.length){el.style.display='none';return}
+  const ds=[...new Set(S.map(e=>e.p.split('/').slice(0,-1).join('/')))];
+  el.style.display='block';
+  el.innerHTML=`<b>⚠ Hay ${S.length} archivo(s) fuera de «${esc(BASE)}» (probable carpeta duplicada)</b><br><span class="st">${esc(ds.join(' · '))}</span><br><span class="st">Puedo moverlos dentro de «${esc(BASE)}» y unirlos con las carpetas que ya existen. Si un archivo idéntico ya existe, solo se elimina la copia; si es distinto, se conserva con el sufijo «_copia».</span><br><button class="btn" id="stfix">Ordenar y fusionar</button>`;
+  $('#stfix').onclick=fixStray}
+async function fixStray(){const S=strays();if(!S.length)return;
+  if(!await ask(`¿Mover ${S.length} archivo(s) a «${BASE}»? Queda todo registrado en el historial de Git.`,'c'))return;
+  await busy('',async()=>{let i=0;const skip=[];
+    for(const f of S){stat('#sC',`Ordenando ${++i} de ${S.length}…`);const parts=f.p.split('/'),name=parts.pop();
+      if(!/\.(html?|txt|md|svg|json|css|js|csv)$|^\.gitkeep$/i.test(name)){skip.push(f.p);continue}
+      const segs=tidy(BASE,parts);let np=[BASE,...segs,name].join('/');const ex=F.find(x=>x.p===np);
+      if(ex){if(ex.sha===f.sha){await del(f);continue}const d=name.lastIndexOf('.');np=[BASE,...segs,d>0?name.slice(0,d)+'_copia'+name.slice(d):name+'_copia'].join('/')}
+      await mv(f,np)}
+    if(skip.length)throw new Error('No moví archivos que no son de texto: '+skip.join(', '))})}
 $('#up').onchange=async e=>{const fs=[...e.target.files];e.target.value='';await busy('',async()=>{let i=0;for(const f of fs){stat('#sC',`Subiendo ${++i} de ${fs.length}: ${f.name}`);if(f.size>100*1048576){stat('#sC',f.name+' supera los 100 MB que permite GitHub; se omitió.','er');continue}
     if(f.size>50*1048576&&!await ask(f.name+' pesa más de 50 MB (GitHub lo advierte). ¿Subirlo igual?','c'))continue;
     if(USED+f.size>LIM&&!await ask('Subir «'+f.name+'» superaría el 1 GB recomendado del repositorio. ¿Subirlo de todos modos?','c'))continue;
@@ -383,7 +402,7 @@ function zcard(file,A){const el=document.createElement('div');el.className='row'
   <details><summary class="st" style="cursor:pointer">Vista previa de la estructura</summary><pre class="st" style="white-space:pre-wrap;margin:6px 0"></pre></details>
   <div class="st">Se omiten ${A.skip} imagen(es) exportada(s) sin uso en los HTML${A.oth?' y '+A.oth+' archivo(s) de otro tipo':''}.</div>`;
   const q=x=>el.querySelector(x),sg=v=>v.split('/').map(x=>x.trim()).filter(Boolean),badN=v=>!v||/[\/\\]/.test(v)||v.startsWith('.');
-  const tgt=()=>{const pjs=sg(q('.pn').value),pj=pjs.join('/'),dest=q('.ds').value;let err=!pjs.length||pjs.some(x=>x.startsWith('.')||/\\/.test(x))?'Ruta de proyecto no válida (usa «/» solo para separar carpetas).':'';
+  const tgt=()=>{const dest=q('.ds').value,pjs=tidy(dest,sg(q('.pn').value)),pj=pjs.join('/');let err=!pjs.length||pjs.some(x=>x.startsWith('.')||/\\/.test(x))?'Ruta de proyecto no válida (usa «/» solo para separar carpetas).':'';
     const T=A.items.map((it,i)=>{const on=q(`input[type=checkbox][data-i="${i}"]`).checked,stem=q(`.nm[data-i="${i}"]`).value.trim(),
       fs=sg(it.grp!=null?q(`.gf[data-g="${it.grp}"]`).value:(q(`.lf[data-i="${i}"]`)||{value:''}).value);
       if(on&&badN(stem))err='Hay un nombre de archivo no válido.';if(on&&fs.some(x=>x.startsWith('.')||/\\/.test(x)))err='Hay un nombre de carpeta no válido.';
